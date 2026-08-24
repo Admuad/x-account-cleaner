@@ -1,0 +1,46 @@
+{
+  "name": "x-account-cleaner",
+  "version": "1.0.0",
+  "description": "Autonomous browser automation CLI tool to delete X (Twitter) posts, replies, unfollow accounts, and remove followers safely.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/index.ts",
+    "clean": "ts-node src/index.ts",
+    "set-cookies": "ts-node src/set-cookies.ts",
+    "test": "ts-node tests/test-archive-whitelist.ts",
+    "ui": "npm --prefix web run dev",
+    "build:ui": "npm --prefix web run build",
+    "start:ui": "npm --prefix web run start"
+  },
+  "keywords": [
+    "twitter",
+    "x",
+    "cleaner",
+    "purge",
+    "delete-tweets",
+    "unfollow",
+    "remove-followers",
+    "playwright"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "chalk": "^4.1.2",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "inquirer": "^8.2.6",
+    "ora": "^5.4.1",
+    "playwright": "^1.49.1"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
+    "@types/chalk": "^2.2.4",
+    "@types/inquirer": "^8.2.10",
+    "@types/node": "^20.17.10",
+    "@types/ora": "^3.2.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}

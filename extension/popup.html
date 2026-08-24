@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>X Cleaner Companion</title>
+  <style>
+    body {
+      width: 320px;
+      margin: 0;
+      padding: 16px;
+      background-color: #121313;
+      color: #f7f9f9;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      box-sizing: border-box;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #282b2e;
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo-badge {
+      width: 24px;
+      height: 24px;
+      background: #FF6044;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 14px;
+      color: white;
+    }
+    .title {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .card {
+      background: #181a1b;
+      border: 1px solid #282b2e;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #00ba7c;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background: #00ba7c;
+      border-radius: 50%;
+    }
+    .btn {
+      width: 100%;
+      background: #FF6044;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+    .btn:hover {
+      background: #e64528;
+    }
+    .info {
+      font-size: 11px;
+      color: #8b98a5;
+      line-height: 1.4;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      <div class="logo-badge">𝕏</div>
+      <div class="title">X PURGE</div>
+    </div>
+    <span style="font-size: 10px; color: #FF6044; font-family: monospace; font-weight: bold;">v2.0</span>
+  </div>
+
+  <div class="card">
+    <div class="status-badge">
+      <span class="status-dot"></span>
+      <span>Session Bridge Active</span>
+    </div>
+    <div style="font-size: 12px; font-weight: 600;" id="accountName">Target: Connected Tab</div>
+    <div style="font-size: 11px; color: #8b98a5; margin-top: 4px;">Zero server compute • Runs directly in browser</div>
+  </div>
+
+  <button class="btn" id="openDashboardBtn">
+    Launch Web Dashboard
+  </button>
+
+  <p class="info" style="margin-top: 12px;">
+    Open your X profile tab, then use the Web Dashboard to run surgical date-range sweeps.
+  </p>
+
+  <script src="popup.js"></script>
+</body>
+</html>

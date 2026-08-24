@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "X Purge & Account Cleaner Companion",
+  "version": "2.0.0",
+  "description": "Companion extension for X Account Cleaner. Executes high-speed, zero-server client-side deletions and unfollows.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "http://localhost:3000/*",
+    "http://localhost:*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "X Account Cleaner"
+  }
+}

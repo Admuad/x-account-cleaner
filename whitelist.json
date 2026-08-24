@@ -1,0 +1,16 @@
+{
+  "description": "Specify usernames, handles, and tweet IDs you want to PRESERVE (never unfollow, never remove, never delete).",
+  "usernames": [
+    "elonmusk",
+    "x",
+    "OpenAI"
+  ],
+  "tweetIds": [
+    "1234567890123456789"
+  ],
+  "keywordsToKeep": [
+    "#keep",
+    "#pinned"
+  ],
+  "dateCutoff": ""
+}
