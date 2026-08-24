@@ -1,83 +1,141 @@
-# ⚡ VanishX — Autonomous 𝕏 Account Purge & Bot Cleanser
+# VanishX — Autonomous X Timeline Purge & Bot Cleanser
 
-A modern, client-side 𝕏 (Twitter) cleaning suite featuring a **Next.js Web Dashboard**, a **Lightweight Companion Browser Extension**, and a **High-Performance Terminal CLI**. Delete posts, replies, retweets, and mass-unfollow non-mutuals & bots with surgical date-range precision.
+A high-performance, client-side cleaning suite for X (Twitter) consisting of a Next.js Web Dashboard, a lightweight Manifest V3 Browser Extension, and a standalone Playwright Automation CLI.
 
-[![GitHub Repository](https://img.shields.io/badge/GitHub-Admuad%2Fx--account--cleaner-FF6044?logo=github)](https://github.com/Admuad/x-account-cleaner)
-[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
+Designed for surgical timeline purges, date-range filtering, and multi-factor bot detection without requiring expensive Twitter API developer tiers or cloud credential storage.
 
----
-
-## 🌟 Key Features
-
-- **🌐 Web App Dashboard (`/app`)**: Tabbed control room for selecting date ranges, tuning bot detection heuristics, managing whitelists, and monitoring real-time telemetry.
-- **🧩 Companion Browser Extension (`/extension`)**: Manifest V3 extension executing directly in your active `x.com` browser tab. Zero credentials stored on cloud servers.
-- **💻 Headless Terminal CLI (`/cli`)**: Standalone Playwright automation engine for autonomous purges and CI/cron jobs.
-- **📅 Date-Range Fast-Forwarding**: Filter content before specific eras (e.g. *Before Dec 31, 2025*, *Keep Last 30 Days*, *Custom Range*) using native 𝕏 search operators (`until:YYYY-MM-DD`).
-- **🤖 Multi-Factor Bot Radar**: Scores non-mutuals, default egg avatars, random numeric handles (`@user128491`), and inactive scrapers with strict whitelist immunity.
-- **⚡ Zero-State Verification Loop**: Profile header ground-truth counter validation guarantees 0 phantom leftover tweets.
+[![GitHub Repository](https://img.shields.io/badge/GitHub-Admuad%2Fx--account--cleaner-121313?logo=github)](https://github.com/Admuad/x-account-cleaner)
+[![License: MIT](https://img.shields.io/badge/License-MIT-121313.svg)](LICENSE)
+[![Next.js 14](https://img.shields.io/badge/Next.js-14-121313?logo=next.js)](https://nextjs.org/)
+[![Playwright](https://img.shields.io/badge/Playwright-1.49-121313?logo=playwright)](https://playwright.dev/)
 
 ---
 
-## 🚀 Quick Start
+## Architectural Overview
 
-### 1. Launch the Web Application
+VanishX operates on a zero-trust, client-side execution model. All DOM manipulations and GraphQL mutations execute directly within the user's authenticated browser context or local Playwright instance.
+
+```
+                    ┌─────────────────────────┐
+                    │      VanishX Suite      │
+                    └────────────┬────────────┘
+                                 │
+         ┌───────────────────────┼───────────────────────┐
+         ▼                       ▼                       ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Web Dashboard  │     │ Browser Ext V3  │     │  Headless CLI   │
+│     (/app)      │     │  (/extension)   │     │     (/cli)      │
+└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
+         │                       │                       │
+         │  Live IPC Relay       │  Direct Tab Bridge    │  Local Automation
+         └───────────────────────┼───────────────────────┘
+                                 ▼
+                    ┌─────────────────────────┐
+                    │    X.com DOM/GraphQL    │
+                    │   Zero-State Sweeper    │
+                    └─────────────────────────┘
+```
+
+---
+
+## Core Capabilities
+
+- **Date-Range Fast-Forwarding**: Jump directly to historical eras (e.g., `until:2025-12-31`) using native search operators without triggering infinite scroll deadlocks.
+- **Multi-Factor Bot Radar**: Heuristic scoring engine evaluating non-mutual relationships, default avatars, numeric handle patterns (`@user\d{4,}`), empty bios, and skewed following/follower ratios ($>50\times$).
+- **Zero-State Verification Loop**: Reads profile header counters dynamically to ensure full timeline clearance and bypass X's virtual DOM caching lag.
+- **Dedicated Reposts Purging**: Native support for un-retweeting posts on the dedicated `/reposts` route.
+- **Immutable Whitelist Vault**: Complete preservation for protected usernames, specific tweet IDs, and preservation keywords (`#keep`).
+- **Parallel Multi-Tab Execution**: Concurrent workers for simultaneous tweet deletion and relationship cleanup.
+
+---
+
+## Quick Start
+
+### 1. Web Application
+
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/Admuad/x-account-cleaner.git
 cd x-account-cleaner
 
-# Start the Web Dashboard
+# Start web dashboard
 npm run ui
 ```
-*Open `http://localhost:3000` in your browser.*
+
+Access the interface at `http://localhost:3000`.
 
 ---
 
-### 2. Run the Terminal CLI
+### 2. Headless Terminal CLI
+
 ```bash
-# Install dependencies
+# Install root dependencies
 npm install
 
-# Download Playwright Chromium binary
+# Install Playwright browser binary
 npx playwright install chromium
 
-# Launch the interactive CLI wizard
+# Launch interactive CLI wizard
 npm start
 ```
 
 ---
 
-### 3. Load the Browser Extension
-1. Open `chrome://extensions` in Chrome/Brave/Edge.
-2. Toggle **Developer mode** on.
-3. Click **Load unpacked** and select the [`extension/`](extension/) directory.
+### 3. Companion Browser Extension
+
+1. Open `chrome://extensions` (or Kiwi Browser / Orion on mobile).
+2. Enable **Developer mode**.
+3. Click **Load unpacked** and select the `extension/` directory.
+4. Navigate to `x.com` and open `http://localhost:3000/app` to dispatch live tasks.
 
 ---
 
-## 📋 CLI Options Reference
+## CLI Flag Reference
 
 | Flag | Shorthand | Description |
 | :--- | :--- | :--- |
-| `--posts` | `-p` | Delete original posts |
-| `--replies` | `-r` | Delete replies & thread responses |
+| `--posts` | `-p` | Delete original authored posts |
+| `--replies` | `-r` | Delete replies and conversation threads |
 | `--reposts` | `-k` | Undo retweets on dedicated `/reposts` tab |
-| `--unfollow` | `-u` | Unfollow non-mutuals and bot accounts |
-| `--followers`| `-f` | Remove followers (soft-block method) |
-| `--until <date>` | | Target historical tweets before date (e.g. `2025-12-31`) |
-| `--turbo` | | High-speed 0.7s pacing mode |
-| `--dry-run` | `-d` | Simulation mode (preview without deleting) |
-| `--whitelist <path>` | | Custom whitelist JSON file |
+| `--unfollow` | `-u` | Unfollow non-mutual and flagged bot accounts |
+| `--followers` | `-f` | Remove followers via soft-block method |
+| `--until <YYYY-MM-DD>` | | Filter posts created prior to the specified date |
+| `--turbo` | | High-speed 0.7s execution pacing |
+| `--dry-run` | `-d` | Simulation mode (preview targets without deletion) |
+| `--whitelist <path>` | | Path to custom whitelist configuration |
+| `--headless` | | Execute Playwright in background mode |
 
 ---
 
-## 🔒 Security & Privacy
+## Whitelist Configuration (`whitelist.json`)
 
-VanishX is built on a **Zero-Trust Client-Side Architecture**:
-- Zero passwords, authentication tokens, or private telemetry data are sent to external cloud servers.
-- All actions execute locally via your authenticated browser session or direct Playwright instance.
+```json
+{
+  "usernames": [
+    "elonmusk",
+    "vitalikbuterin"
+  ],
+  "tweetIds": [
+    "1759281928391"
+  ],
+  "keywordsToKeep": [
+    "#keep",
+    "#pinned"
+  ],
+  "dateCutoff": "2026-01-01"
+}
+```
 
 ---
 
-## 📄 License
+## Security & Privacy Model
 
-MIT License. Open-source software created by [Admuad](https://github.com/Admuad).
+1. **Zero External Logging**: No telemetry, tokens, or credentials are transmitted to remote servers.
+2. **Client-Side Session Cache**: Session cookies (`auth_token`, `ct0`) remain stored locally in `.session.json` (git-ignored).
+3. **Adaptive Rate-Limit Protection**: Automatic cooldown triggers with randomized human jitter (400ms–1400ms) to maintain account safety.
+
+---
+
+## License
+
+MIT License. Developed by [Admuad](https://github.com/Admuad).
