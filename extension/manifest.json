@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "X Purge & Account Cleaner Companion",
+  "name": "VanishX Companion Extension",
   "version": "2.0.0",
-  "description": "Companion extension for X Account Cleaner. Executes high-speed, zero-server client-side deletions and unfollows.",
+  "description": "Companion browser extension for VanishX. Executes client-side timeline purges and bot cleansing in active X.com tabs.",
   "permissions": [
     "storage",
     "tabs",
@@ -26,10 +26,18 @@
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://localhost:3000/*",
+        "http://localhost:*/*"
+      ],
+      "js": ["bridge.js"],
+      "run_at": "document_idle"
     }
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "X Account Cleaner"
+    "default_title": "VanishX Cleaner"
   }
 }
