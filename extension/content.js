@@ -1,5 +1,5 @@
 // Content script running inside X (Twitter) Web Interface
-// Autonomous Multi-Module Purge Engine (Following, Posts, Replies, Reposts)
+// Autonomous Multi-Module Purge Engine with Jitter Pacing, Anti-Rogue Locks, and Resume Auto-Reload
 
 console.log('[VanishX Extension] Content script loaded on X.com');
 
@@ -7,11 +7,36 @@ console.log('[VanishX Extension] Content script loaded on X.com');
 let isRunning = false;
 let isPaused = false;
 
-// Check on page load if an active purge task was in progress across navigation
+// Check on page load if an active purge task was in progress across navigation / resume reload
 chrome.storage.local.get(['vanishx_active_task'], (result) => {
-  if (result?.vanishx_active_task?.status === 'running') {
-    console.log('[VanishX Extension] Resuming active purge task from storage:', result.vanishx_active_task);
-    executePurgeLoop(result.vanishx_active_task.config);
+  const activeTask = result?.vanishx_active_task;
+  if (activeTask && activeTask.status === 'running') {
+    console.log('[VanishX Extension] Resuming active purge task from storage:', activeTask);
+    isRunning = true;
+    isPaused = false;
+
+    // If this was triggered by a Resume Reload, notify dashboard and start cleanly after DOM mounts
+    if (activeTask.resumeOnLoad) {
+      chrome.storage.local.set({
+        vanishx_active_task: { ...activeTask, resumeOnLoad: false }
+      });
+      sendLog('info', '🔄 Tab reloaded for clean DOM state. Resuming purge stream in 2.5s...');
+      setTimeout(() => {
+        if (isRunning && !isPaused) {
+          executePurgeLoop(activeTask.config);
+        }
+      }, 2500);
+    } else {
+      setTimeout(() => {
+        if (isRunning && !isPaused) {
+          executePurgeLoop(activeTask.config);
+        }
+      }, 1500);
+    }
+  } else {
+    // If not actively running, ensure flags remain idle
+    isRunning = false;
+    isPaused = false;
   }
 });
 
@@ -38,6 +63,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         status: 'running',
         config: request.config,
         startedAt: Date.now(),
+        resumeOnLoad: false,
       }
     });
 
@@ -48,6 +74,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.type === 'PAUSE_CLIENT_PURGE') {
     isPaused = true;
+    // Update storage state so it doesn't auto-resume on refresh
+    chrome.storage.local.set({
+      vanishx_active_task: {
+        status: 'paused',
+      }
+    });
     sendLog('warn', '⏸️ Purge execution paused by user.');
     sendResponse({ status: 'paused' });
     return true;
@@ -55,14 +87,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.type === 'RESUME_CLIENT_PURGE') {
     isPaused = false;
-    sendLog('info', '▶️ Purge execution resumed by user.');
-    sendResponse({ status: 'resumed' });
-    return true;
+    isRunning = true;
+
+    if (request.reload) {
+      sendLog('info', '🔄 Reloading 𝕏 tab to clear processed items from DOM...');
+      chrome.storage.local.get(['vanishx_active_task'], (res) => {
+        const prevConfig = res?.vanishx_active_task?.config || {};
+        chrome.storage.local.set({
+          vanishx_active_task: {
+            status: 'running',
+            config: prevConfig,
+            resumeOnLoad: true,
+          }
+        }, () => {
+          window.location.reload();
+        });
+      });
+      sendResponse({ status: 'reloading' });
+      return true;
+    } else {
+      sendLog('info', '▶️ Purge execution resumed by user.');
+      sendResponse({ status: 'resumed' });
+      return true;
+    }
   }
 
   if (request.type === 'STOP_CLIENT_PURGE') {
     isRunning = false;
     isPaused = false;
+    // Immediate storage wipe prevents any rogue execution on later manual page refresh
     chrome.storage.local.remove('vanishx_active_task');
     sendLog('warn', '⏹️ Purge execution aborted by user.');
     sendResponse({ status: 'stopped' });
@@ -125,6 +178,18 @@ function extractGroundTruthFollowingCount() {
     }
   } catch (e) {}
   return null;
+}
+
+// Check for X Rate Limits / Anti-Spam Warnings in DOM
+function checkRateLimitWarning() {
+  const text = document.body?.innerText || '';
+  return (
+    text.includes('Rate limit exceeded') ||
+    text.includes('Try again later') ||
+    text.includes('Something went wrong') ||
+    text.includes('unable to follow') ||
+    text.includes('temporarily restricted')
+  );
 }
 
 // ==========================================
@@ -224,7 +289,6 @@ async function runFollowingPurge(config, whitelistUsers) {
     sendTelemetryWithTarget('info', `Target sync: ${groundTruthCount} accounts`, groundTruthCount);
   }
 
-  const pacingMs = config.pacing === 'turbo' ? 450 : config.pacing === 'balanced' ? 900 : 1800;
   const botPreset = config.botFilter?.preset || 'aggressive'; // 'aggressive' = Unfollow All
   let unfollowedCount = 0;
   let consecutiveEmptyPasses = 0;
@@ -236,6 +300,14 @@ async function runFollowingPurge(config, whitelistUsers) {
       await delay(400);
     }
     if (!isRunning) break;
+
+    // Check Anti-Spam Rate Limits
+    if (checkRateLimitWarning()) {
+      sendLog('warn', '⚠️ 𝕏 Rate Limit Alert detected! Pausing for 45s safety cooldown...');
+      await delay(45000);
+      window.location.reload();
+      return;
+    }
 
     const userCells = Array.from(document.querySelectorAll('[data-testid="UserCell"]'));
 
@@ -332,7 +404,10 @@ async function runFollowingPurge(config, whitelistUsers) {
           consecutiveEmptyPasses = 0;
 
           sendLog('unfollow', `👋 Unfollowed @${targetHandle} (#${unfollowedCount})`);
-          await delay(pacingMs);
+          
+          // Human-mimicking jitter delay
+          const jitterDelay = calculateJitter(config.pacing || 'balanced');
+          await delay(jitterDelay);
         }
       } catch (err) {
         console.error('[VanishX] Error unfollowing user:', err);
@@ -343,7 +418,7 @@ async function runFollowingPurge(config, whitelistUsers) {
 
     // Scroll down to fetch next dynamic batch
     window.scrollBy(0, window.innerHeight * 1.5);
-    await delay(1500);
+    await delay(1800);
 
     // Check for empty state
     const emptyState = document.querySelector('[data-testid="emptyState"], [data-testid="empty_timeline"]');
@@ -365,7 +440,6 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
   sendLog('info', '🗑️ [Timeline Engine] Scanning posts and replies...');
   await delay(2500);
 
-  const pacingMs = config.pacing === 'turbo' ? 450 : config.pacing === 'balanced' ? 900 : 1800;
   const keywords = (config.whitelist?.keywords || []).map(k => k.toLowerCase().trim());
   let purgedCount = 0;
   let emptyScrolls = 0;
@@ -375,6 +449,14 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
       await delay(400);
     }
     if (!isRunning) break;
+
+    // Check Anti-Spam Rate Limits
+    if (checkRateLimitWarning()) {
+      sendLog('warn', '⚠️ 𝕏 Rate Limit Alert detected! Pausing for 45s safety cooldown...');
+      await delay(45000);
+      window.location.reload();
+      return;
+    }
 
     // 1. Check for Un-Retweet buttons first
     if (config.modules?.reposts || options.onlyReposts) {
@@ -393,7 +475,9 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
             purgedCount++;
             emptyScrolls = 0;
             sendLog('repost', `Undo Repost / Retweet (#${purgedCount})`);
-            await delay(pacingMs);
+            
+            const jitterDelay = calculateJitter(config.pacing || 'balanced');
+            await delay(jitterDelay);
           }
         } catch (e) {
           console.error(e);
@@ -403,7 +487,7 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
 
     if (options.onlyReposts) {
       window.scrollBy(0, window.innerHeight * 1.5);
-      await delay(1500);
+      await delay(1800);
       continue;
     }
 
@@ -455,7 +539,9 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
             deletedInPass++;
             emptyScrolls = 0;
             sendLog('delete', `Purged timeline post/reply (#${purgedCount})`);
-            await delay(pacingMs);
+            
+            const jitterDelay = calculateJitter(config.pacing || 'balanced');
+            await delay(jitterDelay);
           }
         } else {
           document.body.click();
@@ -472,7 +558,7 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
 
     // Scroll down for next batch
     window.scrollBy(0, window.innerHeight * 1.5);
-    await delay(1500);
+    await delay(1800);
 
     const emptyState = document.querySelector('[data-testid="emptyState"], [data-testid="empty_timeline"]');
     if (emptyState && deletedInPass === 0) {
@@ -487,8 +573,26 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
 }
 
 // ==========================================
-// 5. UTILITIES
+// 5. UTILITIES & JITTER PACING
 // ==========================================
+function calculateJitter(pacing) {
+  // Safe: 2500ms - 4500ms randomized
+  // Balanced: 1200ms - 2500ms randomized
+  // Turbo: 700ms - 1200ms randomized
+  let min = 1200;
+  let max = 2500;
+
+  if (pacing === 'safe') {
+    min = 2500;
+    max = 4500;
+  } else if (pacing === 'turbo') {
+    min = 700;
+    max = 1200;
+  }
+
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 function sendLog(type, message) {
   chrome.runtime.sendMessage({
     type: 'TELEMETRY_LOG_EVENT',

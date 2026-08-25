@@ -96,33 +96,33 @@ export const PurgeModules: React.FC<PurgeModulesProps> = ({
           <Gauge className="w-3.5 h-3.5 text-coral ml-1" />
           <button
             onClick={() => setPacing('safe')}
-            className={`px-2 py-1 rounded text-[11px] font-mono transition-colors ${
+            className={`px-2.5 py-1 rounded text-[11px] font-mono transition-colors ${
               config.pacing === 'safe'
                 ? 'bg-space-card text-brand-emerald font-bold border border-space-border'
                 : 'text-space-muted hover:text-space-text'
             }`}
           >
-            Safe (2.0s)
+            Safe (2.5s-4.5s)
           </button>
           <button
             onClick={() => setPacing('balanced')}
-            className={`px-2 py-1 rounded text-[11px] font-mono transition-colors ${
+            className={`px-2.5 py-1 rounded text-[11px] font-mono transition-colors ${
               config.pacing === 'balanced'
                 ? 'bg-space-card text-coral font-bold border border-space-border'
                 : 'text-space-muted hover:text-space-text'
             }`}
           >
-            Balanced (1.2s)
+            Balanced (1.2s-2.5s)
           </button>
           <button
             onClick={() => setPacing('turbo')}
-            className={`px-2 py-1 rounded text-[11px] font-mono transition-colors ${
+            className={`px-2.5 py-1 rounded text-[11px] font-mono transition-colors ${
               config.pacing === 'turbo'
                 ? 'bg-space-card text-amber-400 font-bold border border-space-border'
                 : 'text-space-muted hover:text-space-text'
             }`}
           >
-            Turbo (0.7s)
+            Turbo (0.7s-1.2s)
           </button>
         </div>
       </div>
