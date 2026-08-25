@@ -31,19 +31,19 @@ export const BotDetector: React.FC<BotDetectorProps> = ({
 
   const presets: { id: BotSensitivityPreset; title: string; desc: string }[] = [
     {
-      id: 'moderate',
-      title: 'Balanced Bot Sweeper',
-      desc: 'Flags high-confidence bots (default avatars, empty bios, extreme ratios).',
-    },
-    {
       id: 'aggressive',
-      title: 'Aggressive Purge',
-      desc: 'Flags all non-mutuals, suspected scrapers, and unverified bot handles.',
+      title: 'Aggressive Purge (Unfollow All)',
+      desc: 'Unfollows 100% of followed accounts. Only accounts in Whitelist Vault are kept.',
     },
     {
       id: 'non_mutuals_only',
       title: 'Non-Mutuals Only',
-      desc: 'Strictly unfollows accounts that do not follow you back (ignores mutuals).',
+      desc: 'Strictly unfollows accounts that do not follow you back (preserves mutuals).',
+    },
+    {
+      id: 'moderate',
+      title: 'Balanced Bot Sweeper',
+      desc: 'Flags high-confidence bots (default avatars, empty bios, extreme follow ratios).',
     },
     {
       id: 'custom',

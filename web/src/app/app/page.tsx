@@ -150,10 +150,26 @@ export default function AppPage() {
         }
       }
       if (event.data?.type === 'VANISHX_TELEMETRY_LOG' && event.data.log) {
-        setTelemetry((prev) => ({
-          ...prev,
-          logs: [...prev.logs.slice(-80), event.data.log],
-        }));
+        const log = event.data.log;
+        setTelemetry((prev) => {
+          const isUnfollow = log.type === 'unfollow';
+          const isDelete = log.type === 'delete';
+          const isRepost = log.type === 'repost' || log.message?.toLowerCase().includes('repost');
+          const isReply = log.type === 'reply' || log.message?.toLowerCase().includes('reply');
+          const isWhitelisted = log.type === 'whitelist' || log.message?.toLowerCase().includes('whitelisted') || log.message?.toLowerCase().includes('skipped');
+
+          return {
+            ...prev,
+            status: log.type === 'success' ? 'completed' : prev.status,
+            totalPurged: prev.totalPurged + (isUnfollow || isDelete || isRepost ? 1 : 0),
+            followingRemoved: prev.followingRemoved + (isUnfollow ? 1 : 0),
+            postsDeleted: prev.postsDeleted + (isDelete && !isReply ? 1 : 0),
+            repliesDeleted: prev.repliesDeleted + (isReply ? 1 : 0),
+            repostsUndone: prev.repostsUndone + (isRepost ? 1 : 0),
+            whitelistSkipped: prev.whitelistSkipped + (isWhitelisted ? 1 : 0),
+            logs: [...prev.logs.slice(-80), log],
+          };
+        });
       }
     };
 
@@ -421,7 +437,7 @@ export default function AppPage() {
   };
 
   useEffect(() => {
-    if (telemetry.status === 'running') {
+    if (telemetry.status === 'running' && !isLiveMode) {
       const delayMs = config.pacing === 'turbo' ? 450 : config.pacing === 'balanced' ? 850 : 1400;
 
       timerRef.current = setInterval(() => {

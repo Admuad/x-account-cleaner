@@ -47,8 +47,8 @@ export function calculateBotScore(account: AuditAccount, config: BotFilterConfig
   } else if (config.preset === 'non_mutuals_only') {
     shouldUnfollow = !account.isFollowingBack;
   } else if (config.preset === 'aggressive') {
-    // Aggressive: non-mutual OR score >= 40 OR default avatar
-    shouldUnfollow = !account.isFollowingBack || normalizedScore >= 40 || account.isDefaultAvatar;
+    // Aggressive: Unfollow 100% of accounts (except Whitelisted)
+    shouldUnfollow = true;
   } else if (config.preset === 'moderate') {
     // Moderate: score >= 70 OR (non-mutual AND (default avatar OR empty bio))
     shouldUnfollow = normalizedScore >= 70 || (!account.isFollowingBack && (account.isDefaultAvatar || !account.bio));
