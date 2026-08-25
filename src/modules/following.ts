@@ -162,8 +162,14 @@ export class FollowingPurgeEngine {
             continue;
           }
 
+          // Strict Guard: Never touch buttons in Follow state
+          const followOnlyBtn = cell.locator('button:text-is("Follow"), button[data-testid$="-follow"]').first();
+          if (await followOnlyBtn.isVisible({ timeout: 200 }).catch(() => false)) {
+            continue;
+          }
+
           // Find unfollow button (must be currently Following)
-          const unfollowBtn = cell.locator('button[data-testid$="-unfollow"], button:has-text("Following")').first();
+          const unfollowBtn = cell.locator('button[data-testid$="-unfollow"], button:text-is("Following")').first();
 
           if (!(await unfollowBtn.isVisible({ timeout: 400 }).catch(() => false))) {
             continue;

@@ -401,6 +401,21 @@ async function executePurgeLoop(config) {
     }
 
     await runTimelinePurge(config, whitelistUsers, { onlyReposts: false });
+    if (!isRunning) return;
+  }
+
+  // ----------------------------------------
+  // MODULE D: REMOVE FOLLOWERS
+  // ----------------------------------------
+  if (modules.followers && isRunning) {
+    const targetFollowersUrl = `https://x.com/${handle}/followers`;
+    if (!window.location.href.toLowerCase().includes(`/${handle.toLowerCase()}/followers`)) {
+      sendLog('info', `Navigating to Followers list: ${targetFollowersUrl}`);
+      window.location.href = targetFollowersUrl;
+      return;
+    }
+
+    await runFollowersPurge(config, whitelistUsers, stats.followersCount);
   }
 
   // Finished all tasks
@@ -408,6 +423,174 @@ async function executePurgeLoop(config) {
     chrome.storage.local.remove('vanishx_active_task');
     stopKeepalive();
     sendLog('success', '✔ VanishX execution completed successfully.');
+  }
+}
+
+// ==========================================
+// 2.5 FOLLOWERS PURGE ENGINE
+// ==========================================
+async function runFollowersPurge(config, whitelistUsers, initialTargetCount = 0) {
+  sendLog('info', '👥 [Followers Engine] Scanning followers list...');
+  await delay(2000);
+
+  const stats = extractCurrentXProfileStats();
+  const groundTruth = stats.followersCount || initialTargetCount;
+  if (groundTruth > 0) {
+    sendLog('info', `📊 Target Ground Truth: ${groundTruth} Followers detected.`);
+    sendTelemetryWithTarget('info', `Target sync: ${groundTruth} followers`, groundTruth);
+  }
+
+  let removedCount = 0;
+  let consecutiveEmptyPasses = 0;
+  const processedHandles = new Set();
+
+  while (isRunning && consecutiveEmptyPasses < 4 && removedCount < 1000) {
+    while (isPaused && isRunning) {
+      await delay(400);
+    }
+    if (!isRunning) break;
+
+    if (checkRateLimitWarning()) {
+      sendLog('warn', '⚠️ 𝕏 Rate Limit Alert detected! Pausing for 45s safety cooldown...');
+      await delay(45000);
+      window.location.reload();
+      return;
+    }
+
+    const userCells = Array.from(document.querySelectorAll('[data-testid="UserCell"]'));
+
+    if (userCells.length === 0) {
+      consecutiveEmptyPasses++;
+      sendLog('info', `Scrolling to load more followers (${consecutiveEmptyPasses}/4)...`);
+      await microScrollDown(450);
+      continue;
+    }
+
+    let removedInPass = 0;
+
+    for (const cell of userCells) {
+      while (isPaused && isRunning) {
+        await delay(400);
+      }
+      if (!isRunning) break;
+
+      const link = cell.querySelector('a[role="link"][href^="/"]');
+      let targetHandle = '';
+      if (link) {
+        const href = link.getAttribute('href') || '';
+        targetHandle = href.replace('/', '').split('/')[0].split('?')[0].trim().toLowerCase();
+      }
+
+      if (!targetHandle || processedHandles.has(targetHandle)) {
+        continue;
+      }
+      processedHandles.add(targetHandle);
+
+      if (whitelistUsers.includes(targetHandle)) {
+        sendLog('info', `🛡️ Skipped follower @${targetHandle} (Whitelisted in Vault)`);
+        continue;
+      }
+
+      // Find 3-dots action menu
+      const moreBtn = cell.querySelector('[data-testid="userFollowActions"], button[aria-label="More"], [data-testid="caret"]');
+      if (!moreBtn) continue;
+
+      try {
+        moreBtn.click();
+        await delay(350);
+
+        // Method 1: "Remove this follower"
+        const menuItems = Array.from(document.querySelectorAll('[role="menuitem"]'));
+        const removeOption = menuItems.find((el) => {
+          const txt = (el.textContent || '').toLowerCase();
+          return txt.includes('remove this follower') || txt.includes('remove follower');
+        });
+
+        if (removeOption) {
+          removeOption.click();
+          await delay(350);
+
+          const confirmBtn = document.querySelector('[data-testid="confirmationSheetConfirm"]');
+          if (confirmBtn) {
+            confirmBtn.click();
+            removedCount++;
+            removedInPass++;
+            consecutiveEmptyPasses = 0;
+            sendLog('unfollow', `🚫 Removed follower @${targetHandle} (#${removedCount})`);
+            const jitterDelay = calculateJitter(config.pacing || 'balanced');
+            await delay(jitterDelay);
+            continue;
+          }
+        }
+
+        // Method 2: Soft-Block fallback
+        const blockOption = menuItems.find((el) => (el.textContent || '').toLowerCase().includes('block @') || (el.textContent || '').toLowerCase().includes('block'));
+        if (blockOption) {
+          blockOption.click();
+          await delay(350);
+
+          const confirmBlock = document.querySelector('[data-testid="confirmationSheetConfirm"]');
+          if (confirmBlock) {
+            confirmBlock.click();
+            await delay(400);
+
+            // Unblock immediately to sever relationship without permanent block
+            const unblockBtn = cell.querySelector('button[data-testid$="-unblock"]') ||
+              Array.from(document.querySelectorAll('button')).find(b => (b.textContent || '').trim() === 'Blocked');
+            if (unblockBtn) {
+              unblockBtn.click();
+              await delay(300);
+              const confirmUnblock = document.querySelector('[data-testid="confirmationSheetConfirm"]');
+              if (confirmUnblock) {
+                confirmUnblock.click();
+                await delay(300);
+              }
+            }
+
+            removedCount++;
+            removedInPass++;
+            consecutiveEmptyPasses = 0;
+            sendLog('unfollow', `🚫 Soft-blocked & removed follower @${targetHandle} (#${removedCount})`);
+            const jitterDelay = calculateJitter(config.pacing || 'balanced');
+            await delay(jitterDelay);
+          }
+        } else {
+          document.body.click();
+          await delay(200);
+        }
+      } catch (err) {
+        console.error('[VanishX] Error removing follower:', err);
+        document.body.click();
+        await delay(200);
+      }
+    }
+
+    if (!isRunning) break;
+    await microScrollDown(450);
+
+    const emptyState = document.querySelector('[data-testid="emptyState"], [data-testid="empty_timeline"]');
+    if (emptyState && removedInPass === 0) {
+      consecutiveEmptyPasses++;
+    }
+  }
+
+  if (isRunning && removedCount > 0) {
+    sendLog('info', '🔍 Triggering Zero-State Verification reload (Confirming 0 remaining followers)...');
+    chrome.storage.local.set({
+      vanishx_active_task: {
+        status: 'verifying',
+        config,
+        module: 'followers',
+        purgedCount: removedCount,
+      }
+    }, () => {
+      window.location.reload();
+    });
+    return;
+  }
+
+  if (isRunning) {
+    sendLog('success', `✔ Completed Followers Purge: ${removedCount} followers removed.`);
   }
 }
 
