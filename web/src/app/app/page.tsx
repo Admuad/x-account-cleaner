@@ -574,7 +574,16 @@ export default function AppPage() {
   const resumeExecution = () => {
     setTelemetry((prev) => ({ ...prev, status: 'running' }));
     if (isLiveMode) {
-      window.postMessage({ type: 'VANISHX_RESUME_PURGE' }, '*');
+      window.postMessage(
+        {
+          type: 'VANISHX_RESUME_PURGE',
+          config: {
+            handle: profile.handle,
+            ...config,
+          },
+        },
+        '*'
+      );
     }
   };
 

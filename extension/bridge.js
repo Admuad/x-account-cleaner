@@ -61,7 +61,10 @@ window.addEventListener('message', (event) => {
 
   // 5. Resume purge
   if (event.data.type === 'VANISHX_RESUME_PURGE') {
-    chrome.runtime.sendMessage({ type: 'RESUME_CLIENT_PURGE' });
+    chrome.runtime.sendMessage({
+      type: 'RESUME_CLIENT_PURGE',
+      config: event.data.config,
+    });
   }
 
   // 6. Stop / Abort purge

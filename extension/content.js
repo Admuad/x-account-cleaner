@@ -3,17 +3,19 @@
 
 console.log('[VanishX Extension] Content script loaded on X.com');
 
-// Global execution control flags
+// Global execution control flags and active config in memory
 let isRunning = false;
 let isPaused = false;
+let activePurgeConfig = null;
 
 // Check on page load if an active purge task was in progress across navigation / resume reload
 chrome.storage.local.get(['vanishx_active_task'], (result) => {
   const activeTask = result?.vanishx_active_task;
-  if (activeTask && activeTask.status === 'running') {
+  if (activeTask && activeTask.status === 'running' && activeTask.config) {
     console.log('[VanishX Extension] Resuming active purge task from storage:', activeTask);
     isRunning = true;
     isPaused = false;
+    activePurgeConfig = activeTask.config;
 
     // If this was triggered by a Resume Reload, notify dashboard and start cleanly after DOM mounts
     if (activeTask.resumeOnLoad) {
@@ -23,13 +25,13 @@ chrome.storage.local.get(['vanishx_active_task'], (result) => {
       sendLog('info', '🔄 Tab reloaded for clean DOM state. Resuming purge stream in 2.5s...');
       setTimeout(() => {
         if (isRunning && !isPaused) {
-          executePurgeLoop(activeTask.config);
+          executePurgeLoop(activePurgeConfig);
         }
       }, 2500);
     } else {
       setTimeout(() => {
         if (isRunning && !isPaused) {
-          executePurgeLoop(activeTask.config);
+          executePurgeLoop(activePurgeConfig);
         }
       }, 1500);
     }
@@ -37,6 +39,7 @@ chrome.storage.local.get(['vanishx_active_task'], (result) => {
     // If not actively running, ensure flags remain idle
     isRunning = false;
     isPaused = false;
+    activePurgeConfig = null;
   }
 });
 
@@ -56,6 +59,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('[VanishX Extension] Starting purge loop with config:', request.config);
     isRunning = true;
     isPaused = false;
+    activePurgeConfig = request.config;
 
     // Persist active task state so navigation doesn't kill execution
     chrome.storage.local.set({
@@ -74,11 +78,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.type === 'PAUSE_CLIENT_PURGE') {
     isPaused = true;
-    // Update storage state so it doesn't auto-resume on refresh
-    chrome.storage.local.set({
-      vanishx_active_task: {
-        status: 'paused',
-      }
+    // Update storage state while strictly preserving the existing config
+    chrome.storage.local.get(['vanishx_active_task'], (res) => {
+      const existingConfig = res?.vanishx_active_task?.config || activePurgeConfig || {};
+      chrome.storage.local.set({
+        vanishx_active_task: {
+          status: 'paused',
+          config: existingConfig,
+        }
+      });
     });
     sendLog('warn', '⏸️ Purge execution paused by user.');
     sendResponse({ status: 'paused' });
@@ -92,11 +100,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.reload) {
       sendLog('info', '🔄 Reloading 𝕏 tab to clear processed items from DOM...');
       chrome.storage.local.get(['vanishx_active_task'], (res) => {
-        const prevConfig = res?.vanishx_active_task?.config || {};
+        const resumeConfig = request.config || res?.vanishx_active_task?.config || activePurgeConfig || {};
+        activePurgeConfig = resumeConfig;
         chrome.storage.local.set({
           vanishx_active_task: {
             status: 'running',
-            config: prevConfig,
+            config: resumeConfig,
             resumeOnLoad: true,
           }
         }, () => {
@@ -115,6 +124,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'STOP_CLIENT_PURGE') {
     isRunning = false;
     isPaused = false;
+    activePurgeConfig = null;
     // Immediate storage wipe prevents any rogue execution on later manual page refresh
     chrome.storage.local.remove('vanishx_active_task');
     sendLog('warn', '⏹️ Purge execution aborted by user.');
@@ -208,8 +218,8 @@ async function executePurgeLoop(config) {
 
   sendLog('info', `🚀 VanishX Engine engaged for @${handle} (Pacing: ${config.pacing || 'balanced'}).`);
 
-  const modules = config.modules || { posts: true, replies: true, reposts: false, following: false };
-  const whitelistUsers = (config.whitelist?.users || []).map(u => u.toLowerCase().replace('@', '').trim());
+  const modules = config.modules || activePurgeConfig?.modules || { posts: false, replies: false, reposts: false, following: false };
+  const whitelistUsers = ((config.whitelist?.users || activePurgeConfig?.whitelist?.users) || []).map(u => u.toLowerCase().replace('@', '').trim());
 
   // ----------------------------------------
   // MODULE A: FOLLOWING PURGE

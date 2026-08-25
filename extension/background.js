@@ -87,7 +87,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'RESUME_CLIENT_PURGE') {
     findTargetXTab((targetTab) => {
       if (targetTab) {
-        chrome.tabs.sendMessage(targetTab.id, { type: 'RESUME_CLIENT_PURGE', reload: true }).catch(() => {});
+        chrome.tabs.sendMessage(targetTab.id, {
+          type: 'RESUME_CLIENT_PURGE',
+          reload: true,
+          config: message.config,
+        }).catch(() => {});
       }
     });
     sendResponse({ received: true });
