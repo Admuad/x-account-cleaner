@@ -138,13 +138,16 @@ export default function AppPage() {
       if (event.data?.type === 'VANISHX_EXTENSION_READY') {
         setExtensionDetected(true);
       }
-      if (event.data?.type === 'VANISHX_X_PROFILE_RESPONSE' && event.data.handle) {
-        const h = event.data.handle;
-        setActiveHandle(h);
-        setHandleInput(h);
-        setProfile((prev) => ({ ...prev, handle: h, name: `@${h}` }));
-        setIsLiveMode(true);
-        localStorage.setItem('vanishx_active_handle', h);
+      if (event.data?.type === 'VANISHX_X_PROFILE_RESPONSE') {
+        setExtensionDetected(true);
+        if (event.data.handle) {
+          const h = event.data.handle;
+          setActiveHandle(h);
+          setHandleInput(h);
+          setProfile((prev) => ({ ...prev, handle: h, name: `@${h}` }));
+          setIsLiveMode(true);
+          localStorage.setItem('vanishx_active_handle', h);
+        }
       }
       if (event.data?.type === 'VANISHX_TELEMETRY_LOG' && event.data.log) {
         setTelemetry((prev) => ({
@@ -155,6 +158,8 @@ export default function AppPage() {
     };
 
     window.addEventListener('message', handleWindowMessage);
+    // Ping bridge on load
+    window.postMessage({ type: 'VANISHX_PING' }, '*');
     return () => window.removeEventListener('message', handleWindowMessage);
   }, []);
 
@@ -326,29 +331,26 @@ export default function AppPage() {
 
   // Detect Active Tab from Extension
   const detectActiveTab = () => {
-    // Check if Chrome extension API is available
+    // 1. Post message to bridge.js
+    window.postMessage({ type: 'VANISHX_GET_X_PROFILE' }, '*');
+    window.postMessage({ type: 'VANISHX_PING' }, '*');
+
+    // 2. Direct runtime fallback
     if (typeof window !== 'undefined' && (window as any).chrome?.runtime?.sendMessage) {
-      (window as any).chrome.runtime.sendMessage({ type: 'GET_X_PROFILE' }, (response: any) => {
-        if (response?.handle) {
-          setActiveHandle(response.handle);
-          setHandleInput(response.handle);
-          setProfile((prev) => ({ ...prev, handle: response.handle, name: `@${response.handle}` }));
-          setIsLiveMode(true);
-          localStorage.setItem('vanishx_active_handle', response.handle);
-          alert(`Successfully detected active 𝕏 tab: @${response.handle}`);
-        } else {
-          alert('Could not detect an active 𝕏 tab. Please open x.com in your browser and ensure you are logged in.');
-        }
-      });
-    } else {
-      // Post message to bridge.js
-      window.postMessage({ type: 'VANISHX_GET_X_PROFILE' }, '*');
-      
-      setTimeout(() => {
-        if (!activeHandle) {
-          alert('Extension not detected yet. Please ensure the extension is loaded from the /extension guide, or enter your 𝕏 handle directly.');
-        }
-      }, 700);
+      try {
+        (window as any).chrome.runtime.sendMessage({ type: 'GET_X_PROFILE' }, (response: any) => {
+          if (response?.handle) {
+            setActiveHandle(response.handle);
+            setHandleInput(response.handle);
+            setProfile((prev) => ({ ...prev, handle: response.handle, name: `@${response.handle}` }));
+            setIsLiveMode(true);
+            setExtensionDetected(true);
+            localStorage.setItem('vanishx_active_handle', response.handle);
+          }
+        });
+      } catch (e) {
+        // Ignore
+      }
     }
   };
 

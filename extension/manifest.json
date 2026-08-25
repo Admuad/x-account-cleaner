@@ -1,8 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "VanishX Companion Extension",
+  "name": "VanishX Companion",
   "version": "2.0.0",
-  "description": "Companion browser extension for VanishX. Executes client-side timeline purges and bot cleansing in active X.com tabs.",
+  "description": "Companion extension for VanishX. Executes client-side timeline purges and bot cleansing in active X.com tabs.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": [
     "storage",
     "tabs",
@@ -13,7 +18,9 @@
     "https://x.com/*",
     "https://twitter.com/*",
     "http://localhost:3000/*",
-    "http://localhost:*/*"
+    "http://localhost:*/*",
+    "http://127.0.0.1:3000/*",
+    "http://127.0.0.1:*/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -30,7 +37,9 @@
     {
       "matches": [
         "http://localhost:3000/*",
-        "http://localhost:*/*"
+        "http://localhost:*/*",
+        "http://127.0.0.1:3000/*",
+        "http://127.0.0.1:*/*"
       ],
       "js": ["bridge.js"],
       "run_at": "document_idle"
@@ -38,6 +47,11 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "VanishX Cleaner"
+    "default_title": "VanishX",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   }
 }

@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>X Cleaner Companion</title>
+  <title>VanishX</title>
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      width: 320px;
-      margin: 0;
+      width: 300px;
       padding: 16px;
-      background-color: #121313;
+      background: #121313;
       color: #f7f9f9;
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      box-sizing: border-box;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 13px;
     }
     .header {
       display: flex;
@@ -27,22 +27,29 @@
       align-items: center;
       gap: 8px;
     }
-    .logo-badge {
-      width: 24px;
-      height: 24px;
+    .logo {
+      width: 26px;
+      height: 26px;
       background: #FF6044;
       border-radius: 6px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 900;
-      font-size: 14px;
+      font-size: 13px;
       color: white;
+      flex-shrink: 0;
     }
-    .title {
-      font-size: 14px;
+    .brand-name {
+      font-size: 13px;
       font-weight: 800;
-      letter-spacing: -0.5px;
+      letter-spacing: -0.3px;
+    }
+    .version {
+      font-size: 10px;
+      color: #FF6044;
+      font-family: 'Menlo', monospace;
+      font-weight: 700;
     }
     .card {
       background: #181a1b;
@@ -51,20 +58,31 @@
       padding: 12px;
       margin-bottom: 12px;
     }
-    .status-badge {
-      display: inline-flex;
+    .status-row {
+      display: flex;
       align-items: center;
       gap: 6px;
       font-size: 11px;
       color: #00ba7c;
       font-weight: 600;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
     }
-    .status-dot {
+    .dot {
       width: 6px;
       height: 6px;
       background: #00ba7c;
       border-radius: 50%;
+      flex-shrink: 0;
+    }
+    #accountName {
+      font-size: 12px;
+      font-weight: 600;
+      color: #f7f9f9;
+      margin-bottom: 3px;
+    }
+    .sub {
+      font-size: 11px;
+      color: #6b7b87;
     }
     .btn {
       width: 100%;
@@ -72,7 +90,7 @@
       color: white;
       border: none;
       border-radius: 6px;
-      padding: 10px;
+      padding: 10px 14px;
       font-size: 12px;
       font-weight: 700;
       cursor: pointer;
@@ -80,43 +98,48 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      transition: background 0.2s;
+      transition: background 0.15s;
+      letter-spacing: -0.2px;
     }
-    .btn:hover {
-      background: #e64528;
-    }
-    .info {
-      font-size: 11px;
-      color: #8b98a5;
-      line-height: 1.4;
+    .btn:hover { background: #e64528; }
+    .btn svg { flex-shrink: 0; }
+    .footer {
+      font-size: 10px;
+      color: #4a5560;
       text-align: center;
+      margin-top: 10px;
+      line-height: 1.5;
     }
   </style>
 </head>
 <body>
   <div class="header">
     <div class="brand">
-      <div class="logo-badge">𝕏</div>
-      <div class="title">X PURGE</div>
+      <div class="logo">𝕏</div>
+      <span class="brand-name">VanishX</span>
     </div>
-    <span style="font-size: 10px; color: #FF6044; font-family: monospace; font-weight: bold;">v2.0</span>
+    <span class="version" id="version">v2.0</span>
   </div>
 
   <div class="card">
-    <div class="status-badge">
-      <span class="status-dot"></span>
+    <div class="status-row" id="statusBadge">
+      <span class="dot"></span>
       <span>Session Bridge Active</span>
     </div>
-    <div style="font-size: 12px; font-weight: 600;" id="accountName">Target: Connected Tab</div>
-    <div style="font-size: 11px; color: #8b98a5; margin-top: 4px;">Zero server compute • Runs directly in browser</div>
+    <div id="accountName">Detecting tab...</div>
+    <div class="sub">Zero server compute · Runs in browser</div>
   </div>
 
   <button class="btn" id="openDashboardBtn">
-    Launch Web Dashboard
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+      <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+    </svg>
+    Open Web Dashboard
   </button>
 
-  <p class="info" style="margin-top: 12px;">
-    Open your X profile tab, then use the Web Dashboard to run surgical date-range sweeps.
+  <p class="footer">
+    Open your 𝕏 profile tab, then use the<br>Dashboard to run date-range purge sweeps.
   </p>
 
   <script src="popup.js"></script>

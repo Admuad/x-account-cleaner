@@ -19,6 +19,8 @@ export default function ExtensionPage() {
       }
     };
     window.addEventListener('message', handleMessage);
+    // Ping bridge on load
+    window.postMessage({ type: 'VANISHX_PING' }, '*');
 
     // 2. Check if Chrome extension runtime is directly available
     if (typeof window !== 'undefined' && (window as any).chrome?.runtime?.sendMessage) {
