@@ -11,8 +11,17 @@ export default function ExtensionPage() {
   const [checking, setChecking] = useState<boolean>(true);
 
   useEffect(() => {
-    // Check if VanishX companion extension is available
-    if (typeof window !== 'undefined' && (window as any).chrome?.runtime) {
+    // 1. Listen for window message from bridge.js
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'VANISHX_EXTENSION_READY') {
+        setIsInstalled(true);
+        setChecking(false);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+
+    // 2. Check if Chrome extension runtime is directly available
+    if (typeof window !== 'undefined' && (window as any).chrome?.runtime?.sendMessage) {
       try {
         (window as any).chrome.runtime.sendMessage(
           { type: 'CHECK_EXTENSION_INSTALLED' },
@@ -27,8 +36,10 @@ export default function ExtensionPage() {
         setChecking(false);
       }
     } else {
-      setTimeout(() => setChecking(false), 500);
+      setTimeout(() => setChecking(false), 600);
     }
+
+    return () => window.removeEventListener('message', handleMessage);
   }, []);
 
   return (
@@ -79,63 +90,97 @@ export default function ExtensionPage() {
             </div>
           </div>
 
-          <Link
-            href="/app"
-            className="coral-button px-5 py-2.5 text-xs font-bold flex items-center space-x-2"
-          >
-            <span>Open Web Dashboard</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+          {/* Dynamic Action Button: Get Extension (if not detected) OR Open Web Dashboard (if detected) */}
+          {isInstalled ? (
+            <Link
+              href="/app"
+              className="coral-button px-5 py-2.5 text-xs font-bold flex items-center space-x-2"
+            >
+              <span>Open Web Dashboard</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          ) : (
+            <a
+              href="/vanishx-extension.zip"
+              download="vanishx-extension.zip"
+              className="coral-button px-5 py-2.5 text-xs font-bold flex items-center space-x-2"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Get Extension</span>
+            </a>
+          )}
         </div>
 
         {/* Installation Steps */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="clean-card p-6 border-space-border">
-            <div className="flex items-center space-x-2 text-sm font-bold text-space-text mb-3">
-              <Chrome className="w-4 h-4 text-coral" />
-              <span>Desktop: Chrome, Brave, Edge</span>
+          <div className="clean-card p-6 border-space-border flex flex-col justify-between">
+            <div>
+              <div className="flex items-center space-x-2 text-sm font-bold text-space-text mb-3">
+                <Chrome className="w-4 h-4 text-coral" />
+                <span>Desktop: Chrome, Brave, Edge</span>
+              </div>
+              <ol className="list-decimal list-inside space-y-2.5 text-xs text-space-muted leading-relaxed mb-4">
+                <li>
+                  Download the extension zip file using the <strong className="text-coral">Get Extension</strong> button.
+                </li>
+                <li>
+                  Extract the zip file to a folder on your computer.
+                </li>
+                <li>
+                  Open your browser's extensions page (<code className="text-space-text bg-space-darkest px-1 py-0.5 rounded border border-space-border">chrome://extensions</code>).
+                </li>
+                <li>
+                  Enable <strong className="text-space-text">Developer mode</strong> in the top-right corner.
+                </li>
+                <li>
+                  Click <strong className="text-space-text">Load unpacked</strong> and select the extracted folder.
+                </li>
+              </ol>
             </div>
-            <ol className="list-decimal list-inside space-y-2.5 text-xs text-space-muted leading-relaxed">
-              <li>
-                Open your browser's extensions page (e.g. <code className="text-space-text bg-space-darkest px-1 py-0.5 rounded border border-space-border">chrome://extensions</code>).
-              </li>
-              <li>
-                Enable <strong className="text-space-text">Developer mode</strong> in the top-right corner.
-              </li>
-              <li>
-                Click <strong className="text-space-text">Load unpacked</strong>.
-              </li>
-              <li>
-                Select the <code className="text-coral bg-space-darkest px-1.5 py-0.5 rounded border border-space-border font-mono font-bold">extension/</code> folder inside this repository.
-              </li>
-              <li>
-                Pin the VanishX extension to your browser toolbar.
-              </li>
-            </ol>
+
+            <a
+              href="/vanishx-extension.zip"
+              download="vanishx-extension.zip"
+              className="flex items-center justify-center space-x-2 py-2 rounded-md bg-space-darkest hover:bg-space-card border border-space-border text-xs text-space-text font-semibold transition-colors"
+            >
+              <Download className="w-3.5 h-3.5 text-coral" />
+              <span>Download Desktop Bundle (.zip)</span>
+            </a>
           </div>
 
-          <div className="clean-card p-6 border-space-border">
-            <div className="flex items-center space-x-2 text-sm font-bold text-space-text mb-3">
-              <Smartphone className="w-4 h-4 text-coral" />
-              <span>Mobile: Kiwi Browser (Android) or Orion (iOS)</span>
+          <div className="clean-card p-6 border-space-border flex flex-col justify-between">
+            <div>
+              <div className="flex items-center space-x-2 text-sm font-bold text-space-text mb-3">
+                <Smartphone className="w-4 h-4 text-coral" />
+                <span>Mobile: Kiwi Browser (Android) or Orion (iOS)</span>
+              </div>
+              <ol className="list-decimal list-inside space-y-2.5 text-xs text-space-muted leading-relaxed mb-4">
+                <li>
+                  Install <strong className="text-space-text">Kiwi Browser</strong> (Android) or <strong className="text-space-text">Orion</strong> (iOS).
+                </li>
+                <li>
+                  Download the <strong className="text-coral">vanishx-extension.zip</strong> file to your device.
+                </li>
+                <li>
+                  Open <code className="text-space-text bg-space-darkest px-1 py-0.5 rounded border border-space-border">chrome://extensions</code> in Kiwi/Orion.
+                </li>
+                <li>
+                  Enable <strong className="text-space-text">Developer mode</strong> and tap <strong className="text-space-text">+(from .zip/.crx)</strong>.
+                </li>
+                <li>
+                  Open <code className="text-space-text bg-space-darkest px-1 py-0.5 rounded border border-space-border">x.com</code> and return to the Web Dashboard!
+                </li>
+              </ol>
             </div>
-            <ol className="list-decimal list-inside space-y-2.5 text-xs text-space-muted leading-relaxed">
-              <li>
-                Install <strong className="text-space-text">Kiwi Browser</strong> from Google Play Store or <strong className="text-space-text">Orion</strong> on iOS.
-              </li>
-              <li>
-                Open <code className="text-space-text bg-space-darkest px-1 py-0.5 rounded border border-space-border">chrome://extensions</code> in Kiwi/Orion.
-              </li>
-              <li>
-                Enable <strong className="text-space-text">Developer mode</strong> and tap <strong className="text-space-text">Load unpacked</strong>.
-              </li>
-              <li>
-                Select the extension folder or uploaded zip file.
-              </li>
-              <li>
-                Open <code className="text-space-text bg-space-darkest px-1 py-0.5 rounded border border-space-border">x.com</code> and launch the Web App!
-              </li>
-            </ol>
+
+            <a
+              href="/vanishx-extension.zip"
+              download="vanishx-extension.zip"
+              className="flex items-center justify-center space-x-2 py-2 rounded-md bg-space-darkest hover:bg-space-card border border-space-border text-xs text-space-text font-semibold transition-colors"
+            >
+              <Download className="w-3.5 h-3.5 text-coral" />
+              <span>Download Mobile Package (.zip)</span>
+            </a>
           </div>
         </div>
 
