@@ -74,7 +74,7 @@ export interface AuditAccount {
 export interface TelemetryLog {
   id: string;
   timestamp: string;
-  type: 'info' | 'success' | 'warn' | 'error' | 'delete' | 'unfollow';
+  type: 'info' | 'success' | 'warn' | 'error' | 'delete' | 'unfollow' | 'whitelist' | 'repost' | 'reply';
   message: string;
   itemHandle?: string;
   itemId?: string;

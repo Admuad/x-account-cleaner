@@ -9,10 +9,30 @@ import { BotDetector } from '@/components/BotDetector';
 import { PurgeModules } from '@/components/PurgeModules';
 import { WhitelistManager } from '@/components/WhitelistManager';
 import { TerminalConsole } from '@/components/TerminalConsole';
+import { ToastContainer, ToastMessage } from '@/components/Toast';
 import { AccountProfile, PurgeConfig, AuditAccount, TelemetryState, TelemetryLog } from '@/types';
 import { INITIAL_AUDIT_ACCOUNTS } from '@/utils/mockData';
 import { generateXSearchQuery } from '@/utils/dateHelper';
-import { Calendar, Bot, Shield, Terminal, Search, Puzzle, CheckCircle2, Zap, ArrowRight, RefreshCw, Sliders, AlertCircle, Info, Lock, X } from 'lucide-react';
+import {
+  Calendar,
+  Bot,
+  Shield,
+  Terminal,
+  Search,
+  Puzzle,
+  CheckCircle2,
+  Zap,
+  ArrowRight,
+  RefreshCw,
+  Sliders,
+  AlertCircle,
+  Info,
+  Lock,
+  X,
+  Play,
+  RotateCcw,
+  Sparkles,
+} from 'lucide-react';
 
 const DEFAULT_CONFIG: PurgeConfig = {
   modules: {
@@ -52,6 +72,20 @@ export default function AppPage() {
   const [isLiveMode, setIsLiveMode] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'dates' | 'bots' | 'whitelist' | 'telemetry'>('dates');
   const [extensionDetected, setExtensionDetected] = useState<boolean>(false);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const showToast = (
+    type: 'success' | 'warning' | 'error' | 'info',
+    message: string,
+    title?: string
+  ) => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev.slice(-3), { id, type, message, title }]);
+  };
+
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
 
   // Dynamic Profile State (Unauthenticated / clean by default)
   const [profile, setProfile] = useState<AccountProfile>({
@@ -92,9 +126,22 @@ export default function AppPage() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const actionTimestampsRef = useRef<number[]>([]);
 
-  // Load user data & whitelist from localStorage on mount
+  // Load user data & whitelist on mount; restore active telemetry stream if running
   useEffect(() => {
     try {
+      // 1. Check if an active execution was running before refresh
+      const activeTelemetryStr = localStorage.getItem('vanishx_active_telemetry');
+      if (activeTelemetryStr) {
+        const savedTelemetry = JSON.parse(activeTelemetryStr);
+        if (savedTelemetry && (savedTelemetry.status === 'running' || savedTelemetry.status === 'paused')) {
+          setTelemetry(savedTelemetry);
+          setActiveTab('telemetry');
+          setIsLiveMode(true);
+        } else {
+          localStorage.removeItem('vanishx_active_telemetry');
+        }
+      }
+
       const savedHandle = localStorage.getItem('vanishx_active_handle');
       if (savedHandle) {
         setActiveHandle(savedHandle);
@@ -116,18 +163,6 @@ export default function AppPage() {
             tweets: Array.isArray(parsed.tweets) ? parsed.tweets : [],
             keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
           },
-        }));
-      }
-
-      const savedConfig = localStorage.getItem('vanishx_config');
-      if (savedConfig) {
-        const parsed = JSON.parse(savedConfig);
-        setConfig((prev) => ({
-          ...prev,
-          modules: parsed.modules || prev.modules,
-          dateFilter: parsed.dateFilter || prev.dateFilter,
-          botFilter: parsed.botFilter || prev.botFilter,
-          pacing: parsed.pacing || prev.pacing,
         }));
       }
     } catch (e) {
@@ -162,6 +197,7 @@ export default function AppPage() {
           }));
           setIsLiveMode(true);
           localStorage.setItem('vanishx_active_handle', h);
+          showToast('success', `Connected to @${h} via 𝕏 Companion Extension`, 'Tab Detected');
         }
       }
       if (event.data?.type === 'VANISHX_TELEMETRY_LOG' && event.data.log) {
@@ -210,15 +246,74 @@ export default function AppPage() {
     return () => window.removeEventListener('message', handleWindowMessage);
   }, []);
 
-  // Save changes to localStorage
+  // Save active running telemetry to localStorage so reloading the tab preserves live progress
+  useEffect(() => {
+    if (telemetry.status === 'running' || telemetry.status === 'paused') {
+      try {
+        localStorage.setItem('vanishx_active_telemetry', JSON.stringify(telemetry));
+      } catch (e) {}
+    } else if (telemetry.status === 'completed' || telemetry.status === 'aborted' || telemetry.status === 'idle') {
+      localStorage.removeItem('vanishx_active_telemetry');
+    }
+  }, [telemetry]);
+
+  // Live timer for elapsed seconds & ticker decay
+  useEffect(() => {
+    if (telemetry.status === 'running') {
+      const interval = setInterval(() => {
+        setTelemetry((prev) => {
+          if (prev.status !== 'running') return prev;
+          const now = Date.now();
+          const recentActions = actionTimestampsRef.current.filter((t) => now - t <= 12000);
+          actionTimestampsRef.current = recentActions;
+          const count = recentActions.length;
+          const liveVelocity = count === 0 ? 0 : Number((count / (count > 1 ? 12 : 6)).toFixed(1));
+
+          return {
+            ...prev,
+            elapsedSeconds: prev.elapsedSeconds + 1,
+            velocity: liveVelocity,
+          };
+        });
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [telemetry.status]);
+
+  // Save changes to whitelist
   const handleConfigChange = (newConfig: PurgeConfig) => {
     setConfig(newConfig);
     try {
-      localStorage.setItem('vanishx_config', JSON.stringify(newConfig));
       localStorage.setItem('vanishx_whitelist', JSON.stringify(newConfig.whitelist));
     } catch (e) {
-      console.error('Error saving config', e);
+      console.error('Error saving whitelist', e);
     }
+  };
+
+  // Step Navigation Guard
+  const handleTabSelect = (tab: 'dates' | 'bots' | 'whitelist' | 'telemetry') => {
+    if (tab === 'telemetry' && isLiveMode) {
+      if (!activeHandle) {
+        showToast(
+          'warning',
+          'Please enter your 𝕏 handle or click "Detect Tab" before accessing Live Telemetry.',
+          'Account Required'
+        );
+        setActiveTab('dates');
+        return;
+      }
+      const hasModuleSelected = Object.values(config.modules).some(Boolean);
+      if (!hasModuleSelected) {
+        showToast(
+          'warning',
+          'Please select at least one purge action in Step 1 (e.g. Unfollow, Posts, Replies, or Reposts).',
+          'Module Selection Required'
+        );
+        setActiveTab('dates');
+        return;
+      }
+    }
+    setActiveTab(tab);
   };
 
   // Switch between Sandbox Demo and Live Mode
@@ -250,6 +345,7 @@ export default function AppPage() {
           keywords: ['#keep', 'giveaway'],
         },
       }));
+      showToast('info', 'Switched to Sandbox Demo mode with simulated accounts.', 'Demo Mode');
     } else {
       // Live Mode: restore real user state from localStorage
       const savedHandle = localStorage.getItem('vanishx_active_handle') || '';
@@ -288,6 +384,7 @@ export default function AppPage() {
           whitelist: { users: [], tweets: [], keywords: [] },
         }));
       }
+      showToast('info', 'Switched to Live Extension Mode.', 'Live Mode');
     }
   };
 
@@ -296,7 +393,7 @@ export default function AppPage() {
     if (e) e.preventDefault();
     const clean = handleInput.replace(/^@/, '').trim();
     if (!clean) {
-      alert('Please enter a valid 𝕏 username (e.g. elonmusk or jack).');
+      showToast('warning', 'Please enter a valid 𝕏 username (e.g. elonmusk or jack).', 'Invalid Handle');
       return;
     }
     setActiveHandle(clean);
@@ -307,6 +404,7 @@ export default function AppPage() {
     }));
     try {
       localStorage.setItem('vanishx_active_handle', clean);
+      showToast('success', `Target set to @${clean}`, 'Handle Connected');
     } catch (e) {}
   };
 
@@ -328,6 +426,7 @@ export default function AppPage() {
       bio: '',
     });
     localStorage.removeItem('vanishx_active_handle');
+    showToast('info', 'Account disconnected.', 'Disconnected');
   };
 
   // Toggle whitelist immunity on account
@@ -336,17 +435,18 @@ export default function AppPage() {
       prev.map((acc) => {
         if (acc.id === accountId) {
           const nextImmune = !acc.isWhitelisted;
-          // Sync with whitelist.users
           if (nextImmune && !config.whitelist.users.includes(acc.handle)) {
             handleConfigChange({
               ...config,
               whitelist: { ...config.whitelist, users: [...config.whitelist.users, acc.handle] },
             });
+            showToast('success', `Added @${acc.handle} to Whitelist Vault`);
           } else if (!nextImmune && config.whitelist.users.includes(acc.handle)) {
             handleConfigChange({
               ...config,
               whitelist: { ...config.whitelist, users: config.whitelist.users.filter((u) => u !== acc.handle) },
             });
+            showToast('info', `Removed @${acc.handle} from Whitelist Vault`);
           }
           return { ...acc, isWhitelisted: nextImmune };
         }
@@ -355,34 +455,11 @@ export default function AppPage() {
     );
   };
 
-  // Add account to Bot Radar manually
-  const handleAddAccountToRadar = (handle: string) => {
-    const clean = handle.replace(/^@/, '').trim();
-    if (!clean) return;
-    const newAcc: AuditAccount = {
-      id: Math.random().toString(),
-      handle: clean,
-      name: `@${clean}`,
-      avatarUrl: '',
-      isFollowingBack: false,
-      isDefaultAvatar: false,
-      bio: '',
-      followingCount: 500,
-      followersCount: 50,
-      isWhitelisted: config.whitelist.users.includes(clean),
-      botRiskScore: 60,
-      riskFlags: ['Non-Mutual'],
-    };
-    setAccounts((prev) => [newAcc, ...prev]);
-  };
-
-  // Detect Active Tab from Extension
+  // Auto-Detect 𝕏 Tab
   const detectActiveTab = () => {
-    // 1. Post message to bridge.js
     window.postMessage({ type: 'VANISHX_GET_X_PROFILE' }, '*');
     window.postMessage({ type: 'VANISHX_PING' }, '*');
 
-    // 2. Direct runtime fallback
     if (typeof window !== 'undefined' && (window as any).chrome?.runtime?.sendMessage) {
       try {
         (window as any).chrome.runtime.sendMessage({ type: 'GET_X_PROFILE' }, (response: any) => {
@@ -393,18 +470,23 @@ export default function AppPage() {
             setIsLiveMode(true);
             setExtensionDetected(true);
             localStorage.setItem('vanishx_active_handle', response.handle);
+            showToast('success', `Detected 𝕏 tab for @${response.handle}`, 'Tab Connected');
           }
         });
-      } catch (e) {
-        // Ignore
-      }
+      } catch (e) {}
     }
   };
 
   // Execution Handlers
   const startExecution = () => {
     if (!activeHandle) {
-      alert('Please enter or connect your 𝕏 handle first before executing a purge.');
+      showToast('warning', 'Please enter or connect your 𝕏 handle first before executing a purge.', 'Account Required');
+      return;
+    }
+
+    const hasModuleSelected = Object.values(config.modules).some(Boolean);
+    if (!hasModuleSelected) {
+      showToast('warning', 'Please select at least one purge action in Step 1.', 'Module Selection Required');
       return;
     }
 
@@ -412,6 +494,9 @@ export default function AppPage() {
     let targetedCount = 0;
     if (config.modules.following && profile.followingCount > 0) {
       targetedCount += profile.followingCount;
+    }
+    if (config.modules.followers && profile.followersCount > 0) {
+      targetedCount += profile.followersCount;
     }
     if (config.modules.posts && profile.postsCount > 0) {
       targetedCount += profile.postsCount;
@@ -423,7 +508,7 @@ export default function AppPage() {
       targetedCount += profile.repostsCount;
     }
     if (targetedCount === 0) {
-      targetedCount = profile.followingCount || profile.postsCount || 0;
+      targetedCount = profile.followingCount || profile.postsCount || profile.followersCount || 0;
     }
 
     setTelemetry((prev) => ({
@@ -459,15 +544,14 @@ export default function AppPage() {
               {
                 id: Math.random().toString(),
                 timestamp: new Date().toLocaleTimeString(),
-                type: 'info' as const,
-                message: `🛡️ Protected accounts loaded: ${config.whitelist.users.map((u) => '@' + u).join(', ')}`,
+                type: 'whitelist' as const,
+                message: `🛡️ Whitelist Vault engaged: ${config.whitelist.users.length} handles, ${config.whitelist.tweets.length} tweets, ${config.whitelist.keywords.length} keywords protected.`,
               },
             ]
           : []),
       ],
     }));
 
-    // In live mode, dispatch event to extension bridge
     if (isLiveMode) {
       window.postMessage(
         {
@@ -479,20 +563,77 @@ export default function AppPage() {
         },
         '*'
       );
-    }
-  };
-
-  useEffect(() => {
-    if (telemetry.status === 'running' && !isLiveMode) {
-      const delayMs = config.pacing === 'turbo' ? 450 : config.pacing === 'balanced' ? 850 : 1400;
+    } else {
+      // Sandbox Simulation Loop
+      if (timerRef.current) clearInterval(timerRef.current);
+      let stepIndex = 0;
+      const pacingMs = config.pacing === 'turbo' ? 300 : config.pacing === 'safe' ? 1200 : 600;
 
       timerRef.current = setInterval(() => {
+        stepIndex++;
         setTelemetry((prev) => {
-          if (prev.totalPurged >= prev.totalTargeted) {
-            clearInterval(timerRef.current!);
+          if (prev.status !== 'running') return prev;
+
+          const isUnfollowStep = config.modules.following && stepIndex % 3 === 0;
+          const isDeleteStep = config.modules.posts && stepIndex % 2 === 0;
+          const isReplyStep = config.modules.replies && stepIndex % 4 === 0;
+          const isRepostStep = config.modules.reposts && stepIndex % 5 === 0;
+
+          let newLog: TelemetryLog | null = null;
+          let newTotal = prev.totalPurged;
+          let newPosts = prev.postsDeleted;
+          let newReplies = prev.repliesDeleted;
+          let newReposts = prev.repostsUndone;
+          let newFollowing = prev.followingRemoved;
+
+          if (isUnfollowStep) {
+            newFollowing++;
+            newTotal++;
+            const randomUser = accounts[newFollowing % accounts.length]?.handle || `bot_account_${newFollowing}`;
+            newLog = {
+              id: Math.random().toString(),
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'unfollow',
+              message: `👋 Unfollowed @${randomUser} (Non-mutual / Inactive)`,
+            };
+          } else if (isDeleteStep) {
+            newPosts++;
+            newTotal++;
+            newLog = {
+              id: Math.random().toString(),
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'delete',
+              message: `🗑️ Deleted Post ID: 17928374928192${newPosts}`,
+            };
+          } else if (isReplyStep) {
+            newReplies++;
+            newTotal++;
+            newLog = {
+              id: Math.random().toString(),
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'reply',
+              message: `💬 Removed reply on thread 17829102849102${newReplies}`,
+            };
+          } else if (isRepostStep) {
+            newReposts++;
+            newTotal++;
+            newLog = {
+              id: Math.random().toString(),
+              timestamp: new Date().toLocaleTimeString(),
+              type: 'repost',
+              message: `🔄 Undid Repost: 16928192019283${newReposts}`,
+            };
+          }
+
+          const currentSec = prev.elapsedSeconds + 1;
+          const currentVel = Number((newTotal / Math.max(currentSec, 1)).toFixed(1));
+
+          if (newTotal >= prev.totalTargeted && prev.totalTargeted > 0) {
+            if (timerRef.current) clearInterval(timerRef.current);
             return {
               ...prev,
               status: 'completed',
+              totalPurged: prev.totalTargeted,
               velocity: 0,
               logs: [
                 ...prev.logs,
@@ -500,97 +641,33 @@ export default function AppPage() {
                   id: Math.random().toString(),
                   timestamp: new Date().toLocaleTimeString(),
                   type: 'success',
-                  message: '✔ Zero-state verification pass complete! 0 matching items remaining.',
+                  message: `🎉 Sandbox Sweep Finished! Cleaned ${prev.totalTargeted} items completely.`,
                 },
               ],
             };
           }
 
-          const isPost = config.modules.posts && Math.random() > 0.4;
-          const isReply = config.modules.replies && !isPost && Math.random() > 0.3;
-          const isUnfollow = config.modules.following && !isPost && !isReply;
-
-          let logItem: TelemetryLog;
-          const currentTotal = prev.totalPurged + 1;
-
-          if (isUnfollow) {
-            const target = `@user_${Math.floor(Math.random() * 90000 + 10000)}`;
-            logItem = {
-              id: Math.random().toString(),
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'unfollow',
-              message: `Unfollowed non-mutual bot ${target} (Risk: 92%)`,
-            };
-          } else if (isReply) {
-            const tweetId = `18${Math.floor(Math.random() * 9000000000 + 1000000000)}`;
-            logItem = {
-              id: Math.random().toString(),
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'delete',
-              message: `Purged reply ID ${tweetId}`,
-            };
-          } else {
-            const tweetId = `17${Math.floor(Math.random() * 9000000000 + 1000000000)}`;
-            logItem = {
-              id: Math.random().toString(),
-              timestamp: new Date().toLocaleTimeString(),
-              type: 'delete',
-              message: `Deleted post ID ${tweetId} [Era: ${config.dateFilter.preset}]`,
-            };
-          }
-
-          const currentVelocity = config.pacing === 'turbo' ? 2.5 : config.pacing === 'balanced' ? 1.4 : 0.8;
-
           return {
             ...prev,
-            totalPurged: currentTotal,
-            postsDeleted: isPost ? prev.postsDeleted + 1 : prev.postsDeleted,
-            repliesDeleted: isReply ? prev.repliesDeleted + 1 : prev.repliesDeleted,
-            repostsUndone: !isPost && !isReply && !isUnfollow ? prev.repostsUndone + 1 : prev.repostsUndone,
-            followingRemoved: isUnfollow ? prev.followingRemoved + 1 : prev.followingRemoved,
-            velocity: currentVelocity,
-            logs: [...prev.logs.slice(-60), logItem],
+            totalPurged: newTotal,
+            postsDeleted: newPosts,
+            repliesDeleted: newReplies,
+            repostsUndone: newReposts,
+            followingRemoved: newFollowing,
+            velocity: currentVel,
+            logs: newLog ? [...prev.logs.slice(-80), newLog] : prev.logs,
           };
         });
-      }, delayMs);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
+      }, pacingMs);
     }
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [telemetry.status, isLiveMode, config.pacing, config.modules, config.dateFilter]);
-
-  // Live Mode Heartbeat / Elapsed Ticker & Velocity Smoother
-  useEffect(() => {
-    if (telemetry.status === 'running' && isLiveMode) {
-      const liveTicker = setInterval(() => {
-        setTelemetry((prev) => {
-          if (prev.status !== 'running') return prev;
-          const now = Date.now();
-          actionTimestampsRef.current = actionTimestampsRef.current.filter((t) => now - t <= 12000);
-          const activeVelocity = actionTimestampsRef.current.length > 0
-            ? Number((actionTimestampsRef.current.length / 12).toFixed(1))
-            : (prev.totalPurged > 0 && prev.elapsedSeconds > 0 ? Number((prev.totalPurged / prev.elapsedSeconds).toFixed(1)) : 0);
-
-          return {
-            ...prev,
-            elapsedSeconds: prev.elapsedSeconds + 1,
-            velocity: activeVelocity,
-          };
-        });
-      }, 1000);
-
-      return () => clearInterval(liveTicker);
-    }
-  }, [telemetry.status, isLiveMode]);
+  };
 
   const pauseExecution = () => {
     setTelemetry((prev) => ({ ...prev, status: 'paused', velocity: 0 }));
     if (isLiveMode) {
       window.postMessage({ type: 'VANISHX_PAUSE_PURGE' }, '*');
     }
+    showToast('info', 'Execution paused.', 'Paused');
   };
 
   const resumeExecution = () => {
@@ -607,6 +684,7 @@ export default function AppPage() {
         '*'
       );
     }
+    showToast('success', 'Resuming sweep...', 'Resumed');
   };
 
   const abortExecution = () => {
@@ -628,6 +706,7 @@ export default function AppPage() {
         },
       ],
     }));
+    showToast('error', 'Execution stopped by user.', 'Sweep Aborted');
   };
 
   const exportReport = () => {
@@ -645,11 +724,17 @@ export default function AppPage() {
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+    showToast('success', 'Audit report downloaded successfully.', 'Export Complete');
   };
+
+  const isStep4Locked = isLiveMode && !activeHandle;
 
   return (
     <div className="min-h-screen bg-space-black text-space-text flex flex-col selection:bg-coral selection:text-white">
       <Navbar />
+
+      {/* Floating Custom Toast Notifications */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
         {/* Sandbox Notice Banner (only shown in Demo Mode) */}
@@ -670,48 +755,47 @@ export default function AppPage() {
           </div>
         )}
 
-        {/* Top Control Bar: Perfectly Aligned Dynamic Handle & Mode Selector */}
-        <div className="clean-card p-5 border-space-border flex flex-col lg:flex-row items-center justify-between gap-4">
-          {/* Left: Avatar + Unified Connection Input Group */}
-          <div className="flex flex-col sm:flex-row items-center sm:items-center space-y-3 sm:space-y-0 sm:space-x-3.5 w-full lg:w-auto">
-            <TwitterAvatar handle={activeHandle} size="lg" />
-
-            <div className="space-y-1.5 w-full sm:w-auto">
-              <form onSubmit={handleUpdateHandle} className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center bg-space-darkest border border-space-border focus-within:border-coral rounded-md px-3 py-1.5 text-xs transition-colors">
-                  <span className="text-coral font-bold mr-1">@</span>
+        {/* Top Control Bar: Account Connection & Mode Switcher */}
+        <div className="clean-card p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-space-border">
+          {/* Left: Target Account Form */}
+          <div className="flex items-center space-x-3.5 w-full sm:w-auto">
+            <TwitterAvatar
+              handle={profile.handle || activeHandle || ''}
+              size="md"
+            />
+            <div className="flex-1 sm:flex-none">
+              <form onSubmit={handleUpdateHandle} className="flex items-center space-x-2 mb-1">
+                <div className="relative flex items-center">
+                  <span className="absolute left-2.5 text-xs text-coral font-mono font-bold">@</span>
                   <input
                     type="text"
                     value={handleInput}
                     onChange={(e) => setHandleInput(e.target.value)}
                     placeholder="Enter 𝕏 handle"
-                    className="bg-transparent text-xs text-space-text focus:outline-none w-32 sm:w-40 font-semibold placeholder:text-space-muted"
+                    className="bg-space-darkest border border-space-border rounded-md pl-7 pr-3 py-1.5 text-xs text-space-text focus:outline-none focus:border-coral font-mono w-36 sm:w-44"
                   />
                 </div>
-
                 <button
                   type="submit"
-                  className="coral-button px-4 py-1.5 text-xs font-bold whitespace-nowrap"
+                  className="coral-button px-3 py-1.5 text-xs font-semibold"
                 >
-                  {activeHandle && activeHandle === handleInput.replace(/^@/, '').trim() ? 'Connected' : 'Connect'}
+                  Connect
                 </button>
-
                 <button
                   type="button"
                   onClick={detectActiveTab}
-                  title="Detect active handle from open 𝕏 browser tab"
-                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-space-darkest hover:bg-space-card border border-space-border text-xs text-space-muted hover:text-space-text transition-colors whitespace-nowrap"
+                  title="Detect active 𝕏 tab via extension"
+                  className="px-2.5 py-1.5 rounded-md bg-space-darkest hover:bg-space-card border border-space-border text-space-subtext hover:text-space-text text-xs flex items-center space-x-1 transition-colors"
                 >
                   <Puzzle className="w-3.5 h-3.5 text-coral" />
-                  <span>Detect Tab</span>
+                  <span className="hidden sm:inline">Detect Tab</span>
                 </button>
-
                 {activeHandle && (
                   <button
                     type="button"
                     onClick={handleDisconnect}
-                    className="p-1.5 rounded-md bg-space-darkest hover:bg-space-card border border-space-border text-xs text-space-muted hover:text-coral transition-colors"
-                    title="Disconnect account"
+                    title="Disconnect Account"
+                    className="p-1.5 text-space-muted hover:text-crimson transition-colors"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -762,7 +846,7 @@ export default function AppPage() {
         {/* Tab Navigation */}
         <div className="flex items-center space-x-2 border-b border-space-border pb-1 overflow-x-auto text-xs font-semibold">
           <button
-            onClick={() => setActiveTab('dates')}
+            onClick={() => handleTabSelect('dates')}
             className={`px-4 py-2.5 rounded-t-md flex items-center space-x-2 transition-colors ${
               activeTab === 'dates'
                 ? 'bg-space-card text-coral border-t-2 border-coral border-x border-space-border font-bold'
@@ -774,7 +858,7 @@ export default function AppPage() {
           </button>
 
           <button
-            onClick={() => setActiveTab('bots')}
+            onClick={() => handleTabSelect('bots')}
             className={`px-4 py-2.5 rounded-t-md flex items-center space-x-2 transition-colors ${
               activeTab === 'bots'
                 ? 'bg-space-card text-coral border-t-2 border-coral border-x border-space-border font-bold'
@@ -786,7 +870,7 @@ export default function AppPage() {
           </button>
 
           <button
-            onClick={() => setActiveTab('whitelist')}
+            onClick={() => handleTabSelect('whitelist')}
             className={`px-4 py-2.5 rounded-t-md flex items-center space-x-2 transition-colors ${
               activeTab === 'whitelist'
                 ? 'bg-space-card text-coral border-t-2 border-coral border-x border-space-border font-bold'
@@ -798,115 +882,138 @@ export default function AppPage() {
           </button>
 
           <button
-            onClick={() => setActiveTab('telemetry')}
+            onClick={() => handleTabSelect('telemetry')}
             className={`px-4 py-2.5 rounded-t-md flex items-center space-x-2 transition-colors ${
               activeTab === 'telemetry'
                 ? 'bg-space-card text-coral border-t-2 border-coral border-x border-space-border font-bold'
+                : isStep4Locked
+                ? 'text-space-muted/50 hover:text-space-muted cursor-pointer'
                 : 'text-space-muted hover:text-space-text'
             }`}
           >
             <Terminal className="w-4 h-4" />
             <span>4. Live Telemetry</span>
+            {isStep4Locked && <Lock className="w-3 h-3 text-space-muted ml-0.5" />}
             {telemetry.status === 'running' && (
-              <span className="w-2 h-2 rounded-full bg-coral"></span>
+              <span className="w-2 h-2 rounded-full bg-brand-emerald animate-pulse"></span>
             )}
           </button>
         </div>
 
-        {/* Tab Viewport */}
-        <div>
-          {activeTab === 'dates' && (
-            <div className="space-y-6">
-              <DateRangeFilter
-                config={config.dateFilter}
-                onChange={(newDateConfig) => handleConfigChange({ ...config, dateFilter: newDateConfig })}
-                userHandle={profile.handle || 'username'}
-              />
-              <PurgeModules
-                config={config}
-                onChange={handleConfigChange}
-                profile={profile}
-              />
-              <div className="flex justify-end">
-                <button
-                  onClick={() => setActiveTab('bots')}
-                  className="coral-button px-5 py-2.5 text-xs flex items-center space-x-2 font-semibold"
-                >
-                  <span>Next: Configure Bot Radar</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
+        {/* Tab 1: Purge Modules & Date Range */}
+        {activeTab === 'dates' && (
+          <div className="space-y-6">
+            <PurgeModules
+              config={config}
+              onChange={handleConfigChange}
+              profile={profile}
+            />
 
-          {activeTab === 'bots' && (
-            <div className="space-y-6">
-              <BotDetector
-                config={config.botFilter}
-                onChange={(newBotConfig) => handleConfigChange({ ...config, botFilter: newBotConfig })}
-                accounts={accounts}
-                onToggleWhitelist={handleToggleWhitelist}
-                onAddAccount={handleAddAccountToRadar}
-                isLiveMode={isLiveMode}
-              />
-              <div className="flex justify-between">
-                <button
-                  onClick={() => setActiveTab('dates')}
-                  className="px-4 py-2 rounded-md bg-space-card border border-space-border text-xs text-space-muted hover:text-space-text"
-                >
-                  Back: Date Range
-                </button>
-                <button
-                  onClick={() => setActiveTab('whitelist')}
-                  className="coral-button px-5 py-2.5 text-xs flex items-center space-x-2 font-semibold"
-                >
-                  <span>Next: Whitelist Vault</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
+            <DateRangeFilter
+              config={config.dateFilter}
+              onChange={(dateFilter) => handleConfigChange({ ...config, dateFilter })}
+              userHandle={profile.handle || activeHandle || 'your_handle'}
+            />
 
-          {activeTab === 'whitelist' && (
-            <div className="space-y-6">
-              <WhitelistManager
-                whitelist={config.whitelist}
-                onChange={(newWhitelist) => handleConfigChange({ ...config, whitelist: newWhitelist })}
-              />
-              <div className="flex justify-between">
-                <button
-                  onClick={() => setActiveTab('bots')}
-                  className="px-4 py-2 rounded-md bg-space-card border border-space-border text-xs text-space-muted hover:text-space-text"
-                >
-                  Back: Bot Radar
-                </button>
-                <button
-                  onClick={startExecution}
-                  className="coral-button px-6 py-2.5 text-xs flex items-center space-x-2 font-bold"
-                >
-                  <span>Execute Clean Sweep</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
+            <div className="flex justify-end">
+              <button
+                onClick={() => handleTabSelect('bots')}
+                className="coral-button px-5 py-2.5 text-xs flex items-center space-x-2"
+              >
+                <span>Continue to Bot Filters</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-          )}
+          </div>
+        )}
 
-          {activeTab === 'telemetry' && (
-            <div className="space-y-6">
-              <TerminalConsole
-                telemetry={telemetry}
-                onStart={startExecution}
-                onPause={pauseExecution}
-                onResume={resumeExecution}
-                onAbort={abortExecution}
-                onExportReport={exportReport}
-              />
+        {/* Tab 2: Bot Radar & Non-Mutuals */}
+        {activeTab === 'bots' && (
+          <div className="space-y-6">
+            <BotDetector
+              config={config.botFilter}
+              accounts={accounts}
+              onToggleWhitelist={handleToggleWhitelist}
+              onChange={(botFilter) => handleConfigChange({ ...config, botFilter })}
+            />
+
+            <div className="flex justify-between">
+              <button
+                onClick={() => handleTabSelect('dates')}
+                className="px-4 py-2 rounded-md bg-space-card border border-space-border text-xs text-space-subtext hover:text-space-text transition-colors"
+              >
+                Back to Modules
+              </button>
+              <button
+                onClick={() => handleTabSelect('whitelist')}
+                className="coral-button px-5 py-2.5 text-xs flex items-center space-x-2"
+              >
+                <span>Continue to Whitelist Vault</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Tab 3: Whitelist Vault */}
+        {activeTab === 'whitelist' && (
+          <div className="space-y-6">
+            <WhitelistManager
+              whitelist={config.whitelist}
+              onChange={(whitelist) => handleConfigChange({ ...config, whitelist })}
+              onToast={(t) => showToast(t.type, t.message, t.title)}
+            />
+
+            <div className="flex justify-between">
+              <button
+                onClick={() => handleTabSelect('bots')}
+                className="px-4 py-2 rounded-md bg-space-card border border-space-border text-xs text-space-subtext hover:text-space-text transition-colors"
+              >
+                Back to Bot Filters
+              </button>
+              <button
+                onClick={() => handleTabSelect('telemetry')}
+                className="coral-button px-5 py-2.5 text-xs flex items-center space-x-2"
+              >
+                <span>Proceed to Execution Telemetry</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 4: Live Execution Telemetry Stream */}
+        {activeTab === 'telemetry' && (
+          <TerminalConsole
+            telemetry={telemetry}
+            onStart={startExecution}
+            onPause={pauseExecution}
+            onResume={resumeExecution}
+            onAbort={abortExecution}
+            onExportReport={exportReport}
+          />
+        )}
       </main>
 
       <Footer />
     </div>
+  );
+}
+
+function DownloadIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      {...props}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
   );
 }

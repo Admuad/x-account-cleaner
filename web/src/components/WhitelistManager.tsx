@@ -7,11 +7,13 @@ import { WhitelistConfig } from '@/types';
 interface WhitelistManagerProps {
   whitelist: WhitelistConfig;
   onChange: (whitelist: WhitelistConfig) => void;
+  onToast?: (toast: { type: 'success' | 'warning' | 'error' | 'info'; message: string; title?: string }) => void;
 }
 
 export const WhitelistManager: React.FC<WhitelistManagerProps> = ({
   whitelist,
   onChange,
+  onToast,
 }) => {
   const [activeTab, setActiveTab] = useState<'users' | 'tweets' | 'keywords'>('users');
   const [inputValue, setInputValue] = useState('');
@@ -24,10 +26,13 @@ export const WhitelistManager: React.FC<WhitelistManagerProps> = ({
 
     if (activeTab === 'users' && !whitelist.users.includes(clean)) {
       onChange({ ...whitelist, users: [...whitelist.users, clean] });
+      onToast?.({ type: 'success', message: `Added @${clean} to Whitelist` });
     } else if (activeTab === 'tweets' && !whitelist.tweets.includes(clean)) {
       onChange({ ...whitelist, tweets: [...whitelist.tweets, clean] });
+      onToast?.({ type: 'success', message: `Protected tweet ID ${clean}` });
     } else if (activeTab === 'keywords' && !whitelist.keywords.includes(clean)) {
       onChange({ ...whitelist, keywords: [...whitelist.keywords, clean] });
+      onToast?.({ type: 'success', message: `Protected keyword "${clean}"` });
     }
     setInputValue('');
   };
@@ -37,25 +42,28 @@ export const WhitelistManager: React.FC<WhitelistManagerProps> = ({
       ...whitelist,
       [type]: whitelist[type].filter((i) => i !== item),
     });
+    onToast?.({ type: 'info', message: `Removed "${item}" from Whitelist` });
   };
 
   const handleClearCategory = () => {
-    if (confirm(`Clear all ${activeTab}?`)) {
+    if (confirm(`Clear all whitelisted ${activeTab}?`)) {
       onChange({
         ...whitelist,
         [activeTab]: [],
       });
+      onToast?.({ type: 'warning', message: `Cleared all ${activeTab} from Whitelist` });
     }
   };
 
-  const exportJSON = () => {
+  const handleExportJson = () => {
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(whitelist, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', 'whitelist.json');
+    downloadAnchor.setAttribute('download', 'vanishx-whitelist.json');
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+    onToast?.({ type: 'success', message: 'Whitelist exported to JSON' });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,9 +83,17 @@ export const WhitelistManager: React.FC<WhitelistManagerProps> = ({
           tweets,
           keywords,
         });
-        alert(`Successfully imported whitelist: ${users.length} users, ${tweets.length} tweets, ${keywords.length} keywords.`);
+        onToast?.({
+          type: 'success',
+          title: 'Whitelist Imported',
+          message: `Loaded ${users.length} users, ${tweets.length} tweets, and ${keywords.length} keywords.`,
+        });
       } catch (err) {
-        alert('Invalid JSON file format. Please upload a valid whitelist.json.');
+        onToast?.({
+          type: 'error',
+          title: 'Import Failed',
+          message: 'Invalid JSON file format. Please upload a valid whitelist.json.',
+        });
       }
     };
     reader.readAsText(file);
@@ -96,19 +112,19 @@ export const WhitelistManager: React.FC<WhitelistManagerProps> = ({
           </div>
           <div>
             <h2 className="text-sm font-bold text-space-text flex items-center space-x-2">
-              <span>Whitelist & Preservation Vault</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">
-                100% IMMUNE
+              <span>Whitelist Vault & Immune Handles</span>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-brand-emerald/10 text-brand-emerald border border-brand-emerald/20">
+                100% IMMUNITY
               </span>
             </h2>
             <p className="text-xs text-space-muted">
-              Protected accounts, viral tweet IDs, and preservation keywords are excluded from deletions
+              Entities added here will NEVER be deleted, unfollowed, or modified during execution sweeps
             </p>
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center space-x-2 w-full sm:w-auto">
+        {/* Action Buttons */}
+        <div className="flex items-center space-x-2 text-xs">
           <input
             type="file"
             ref={fileInputRef}
@@ -118,111 +134,128 @@ export const WhitelistManager: React.FC<WhitelistManagerProps> = ({
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex-1 sm:flex-initial flex items-center justify-center space-x-1.5 px-3 py-1.5 rounded-md bg-space-darkest hover:bg-space-card border border-space-border text-xs text-space-text transition-colors"
+            className="px-3 py-1.5 rounded-md bg-space-darkest hover:bg-space-card border border-space-border text-space-subtext hover:text-space-text flex items-center space-x-1.5 transition-colors"
           >
-            <Upload className="w-3.5 h-3.5 text-space-muted" />
+            <Upload className="w-3.5 h-3.5" />
             <span>Import JSON</span>
           </button>
-
           <button
-            onClick={exportJSON}
-            className="flex-1 sm:flex-initial flex items-center justify-center space-x-1.5 px-3 py-1.5 rounded-md bg-space-darkest hover:bg-space-card border border-space-border text-xs text-space-text transition-colors"
+            onClick={handleExportJson}
+            className="px-3 py-1.5 rounded-md bg-space-darkest hover:bg-space-card border border-space-border text-space-subtext hover:text-space-text flex items-center space-x-1.5 transition-colors"
           >
-            <Download className="w-3.5 h-3.5 text-coral" />
-            <span>Export whitelist.json</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>Export</span>
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center justify-between border-b border-space-border pb-2 mb-4 text-xs">
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`px-3 py-1.5 rounded-md font-semibold transition-colors ${
-              activeTab === 'users' ? 'bg-space-card text-coral border border-space-border' : 'text-space-muted hover:text-space-text'
-            }`}
-          >
-            Protected Accounts ({whitelist.users.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('tweets')}
-            className={`px-3 py-1.5 rounded-md font-semibold transition-colors ${
-              activeTab === 'tweets' ? 'bg-space-card text-coral border border-space-border' : 'text-space-muted hover:text-space-text'
-            }`}
-          >
-            Protected Tweet IDs ({whitelist.tweets.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('keywords')}
-            className={`px-3 py-1.5 rounded-md font-semibold transition-colors ${
-              activeTab === 'keywords' ? 'bg-space-card text-coral border border-space-border' : 'text-space-muted hover:text-space-text'
-            }`}
-          >
-            Keywords ({whitelist.keywords.length})
-          </button>
-        </div>
-
-        {currentList.length > 0 && (
-          <button
-            onClick={handleClearCategory}
-            className="text-[11px] text-space-muted hover:text-crimson transition-colors flex items-center space-x-1"
-          >
-            <RotateCcw className="w-3 h-3" />
-            <span>Clear</span>
-          </button>
-        )}
-      </div>
-
-      {/* Input Field */}
-      <form onSubmit={handleAddItem} className="flex items-center space-x-2 mb-4">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder={
+      {/* Category Tabs */}
+      <div className="flex items-center space-x-1.5 mb-4 border-b border-space-border pb-2 text-xs">
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`px-3 py-1.5 rounded-md transition-colors ${
             activeTab === 'users'
-              ? 'Enter username to protect (e.g. elonmusk)'
-              : activeTab === 'tweets'
-              ? 'Enter tweet ID to protect (e.g. 1759281928391)'
-              : 'Enter keyword to protect (e.g. #keep or giveaway)'
-          }
-          className="flex-1 bg-space-darkest border border-space-border rounded-md px-3 py-2 text-xs text-space-text focus:outline-none focus:border-coral"
-        />
+              ? 'bg-space-card text-coral font-bold border border-space-border'
+              : 'text-space-muted hover:text-space-text'
+          }`}
+        >
+          Protected Accounts ({whitelist.users.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('tweets')}
+          className={`px-3 py-1.5 rounded-md transition-colors ${
+            activeTab === 'tweets'
+              ? 'bg-space-card text-coral font-bold border border-space-border'
+              : 'text-space-muted hover:text-space-text'
+          }`}
+        >
+          Pinned / Preserved Tweets ({whitelist.tweets.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('keywords')}
+          className={`px-3 py-1.5 rounded-md transition-colors ${
+            activeTab === 'keywords'
+              ? 'bg-space-card text-coral font-bold border border-space-border'
+              : 'text-space-muted hover:text-space-text'
+          }`}
+        >
+          Immune Keywords ({whitelist.keywords.length})
+        </button>
+      </div>
+
+      {/* Add Item Input Form */}
+      <form onSubmit={handleAddItem} className="flex items-center space-x-2 mb-4">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder={
+              activeTab === 'users'
+                ? 'Enter @handle to immune (e.g. sama, jack)'
+                : activeTab === 'tweets'
+                ? 'Enter Tweet ID or URL'
+                : 'Enter keyword or hashtag (e.g. #keep, giveaway)'
+            }
+            className="w-full bg-space-darkest border border-space-border rounded-md px-3 py-2 text-xs text-space-text focus:outline-none focus:border-coral font-mono"
+          />
+        </div>
         <button
           type="submit"
-          className="coral-button px-4 py-2 text-xs flex items-center space-x-1.5 font-semibold"
+          className="coral-button px-4 py-2 text-xs flex items-center space-x-1.5"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>Add</span>
+          <span>Add to Vault</span>
         </button>
       </form>
 
-      {/* Items List */}
-      <div className="flex flex-wrap gap-2 min-h-12 bg-space-darkest p-3 rounded-md border border-space-border">
+      {/* Vault List Container */}
+      <div className="bg-space-darkest rounded-md border border-space-border p-3 min-h-[140px] max-h-56 overflow-y-auto">
         {currentList.length === 0 ? (
-          <span className="text-xs text-space-muted italic my-auto">
-            No items in this category yet. Add items above or import a whitelist.json file.
-          </span>
+          <div className="flex flex-col items-center justify-center py-8 text-space-muted text-xs">
+            <Lock className="w-6 h-6 mb-2 opacity-40 text-brand-emerald" />
+            <p>No immune {activeTab} defined yet in your vault.</p>
+            <p className="text-[11px] text-space-subtext mt-0.5">
+              Items added here are permanently protected from any wipe actions.
+            </p>
+          </div>
         ) : (
-          currentList.map((item) => (
-            <span
-              key={item}
-              className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded bg-space-card border border-space-border text-xs text-space-text font-mono"
-            >
-              <Lock className="w-3 h-3 text-brand-emerald" />
-              <span>{activeTab === 'users' ? `@${item}` : item}</span>
-              <button
-                onClick={() => handleRemoveItem(activeTab, item)}
-                className="text-space-muted hover:text-coral transition-colors ml-1"
-                title="Remove item"
+          <div className="flex flex-wrap gap-2">
+            {currentList.map((item) => (
+              <div
+                key={item}
+                className="flex items-center space-x-2 bg-space-card px-2.5 py-1 rounded-md border border-space-border text-xs font-mono text-space-text group hover:border-coral/50 transition-colors"
               >
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </span>
-          ))
+                <span className="text-brand-emerald text-[11px]">🛡️</span>
+                <span>{activeTab === 'users' ? `@${item}` : item}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveItem(activeTab, item)}
+                  className="text-space-muted hover:text-crimson transition-colors ml-1"
+                  title="Remove from Whitelist"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
+
+      {/* Footer info */}
+      {currentList.length > 0 && (
+        <div className="flex items-center justify-between mt-3 text-[11px] text-space-muted">
+          <span>{currentList.length} items immune in this category</span>
+          <button
+            type="button"
+            onClick={handleClearCategory}
+            className="text-crimson hover:underline flex items-center space-x-1"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Clear Category</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };
