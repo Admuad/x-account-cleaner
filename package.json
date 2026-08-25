@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "Autonomous browser automation CLI tool to delete X (Twitter) posts, replies, unfollow accounts, and remove followers safely.",
   "main": "dist/index.js",
+  "bin": {
+    "x-account-cleaner": "./dist/index.js",
+    "vanishx": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "ts-node src/index.ts",

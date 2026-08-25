@@ -27,7 +27,7 @@ export default function CliPage() {
 
   // Generate dynamic CLI command
   const generateCommand = () => {
-    const parts = ['npx x-account-cleaner'];
+    const parts = ['npm start --'];
     if (flags.posts) parts.push('--posts');
     if (flags.replies) parts.push('--replies');
     if (flags.reposts) parts.push('--reposts');
@@ -40,11 +40,11 @@ export default function CliPage() {
   const steps = [
     {
       id: 'step1',
-      title: 'Step 1: Install or Clone CLI Tool',
-      desc: 'Run directly via npx or clone the standalone lightweight repo',
+      title: 'Step 1: Clone Repository & Install Dependencies',
+      desc: 'Clone the lightweight open-source repository and install dependencies',
       commands: [
-        { label: 'Instant 1-Line Run (Zero Clone)', cmd: 'npx x-account-cleaner' },
-        { label: 'Sparse Clone (CLI Only)', cmd: 'git clone --depth 1 https://github.com/Admuad/x-account-cleaner.git\ncd x-account-cleaner\nnpm install' },
+        { label: 'Recommended: Git Clone & Setup', cmd: 'git clone https://github.com/Admuad/x-account-cleaner.git\ncd x-account-cleaner\nnpm install' },
+        { label: 'Alternative: Direct GitHub npx Run', cmd: 'npx github:Admuad/x-account-cleaner' },
       ],
     },
     {
