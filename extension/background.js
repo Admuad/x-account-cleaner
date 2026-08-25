@@ -106,11 +106,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // 7. Telemetry Log Event — broadcast from content.js to all web dashboard tabs
+  // 7. Telemetry Log Event — broadcast from content.js directly to web dashboard tabs
   if (message.type === 'TELEMETRY_LOG_EVENT') {
-    chrome.tabs.query({}, (allTabs) => {
-      for (const tab of allTabs) {
-        if (tab.url && (tab.url.includes('localhost') || tab.url.includes('127.0.0.1') || tab.url.includes('/app') || tab.url.includes('/extension'))) {
+    chrome.tabs.query({ url: ['http://localhost:*/*', 'http://127.0.0.1:*/*'] }, (dashboardTabs) => {
+      if (dashboardTabs && dashboardTabs.length > 0) {
+        for (const tab of dashboardTabs) {
           chrome.tabs.sendMessage(tab.id, message).catch(() => {});
         }
       }

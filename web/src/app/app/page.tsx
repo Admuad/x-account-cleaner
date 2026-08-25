@@ -90,6 +90,7 @@ export default function AppPage() {
   });
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const actionTimestampsRef = useRef<number[]>([]);
 
   // Load user data & whitelist from localStorage on mount
   useEffect(() => {
@@ -152,6 +153,16 @@ export default function AppPage() {
       if (event.data?.type === 'VANISHX_TELEMETRY_LOG' && event.data.log) {
         const log = event.data.log;
         const newTarget = event.data.totalTargeted;
+        const isAction = log.type === 'unfollow' || log.type === 'delete' || log.type === 'repost';
+
+        let newVelocity = 0;
+        if (isAction) {
+          const now = Date.now();
+          actionTimestampsRef.current = [...actionTimestampsRef.current.filter((t) => now - t <= 12000), now];
+          const count = actionTimestampsRef.current.length;
+          newVelocity = Number((count / (count > 1 ? 12 : 6)).toFixed(1));
+        }
+
         setTelemetry((prev) => {
           const isUnfollow = log.type === 'unfollow';
           const isDelete = log.type === 'delete';
@@ -169,6 +180,7 @@ export default function AppPage() {
             repliesDeleted: prev.repliesDeleted + (isReply ? 1 : 0),
             repostsUndone: prev.repostsUndone + (isRepost ? 1 : 0),
             whitelistSkipped: prev.whitelistSkipped + (isWhitelisted ? 1 : 0),
+            velocity: isAction ? Math.max(newVelocity, 0.4) : prev.velocity,
             logs: [...prev.logs.slice(-80), log],
           };
         });
@@ -176,7 +188,6 @@ export default function AppPage() {
     };
 
     window.addEventListener('message', handleWindowMessage);
-    // Ping bridge on load
     window.postMessage({ type: 'VANISHX_PING' }, '*');
     return () => window.removeEventListener('message', handleWindowMessage);
   }, []);
@@ -527,7 +538,31 @@ export default function AppPage() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [telemetry.status, config.pacing, config.modules]);
+  }, [telemetry.status, isLiveMode, config.pacing, config.modules, config.dateFilter]);
+
+  // Live Mode Heartbeat / Elapsed Ticker & Velocity Smoother
+  useEffect(() => {
+    if (telemetry.status === 'running' && isLiveMode) {
+      const liveTicker = setInterval(() => {
+        setTelemetry((prev) => {
+          if (prev.status !== 'running') return prev;
+          const now = Date.now();
+          actionTimestampsRef.current = actionTimestampsRef.current.filter((t) => now - t <= 12000);
+          const activeVelocity = actionTimestampsRef.current.length > 0
+            ? Number((actionTimestampsRef.current.length / 12).toFixed(1))
+            : (prev.totalPurged > 0 && prev.elapsedSeconds > 0 ? Number((prev.totalPurged / prev.elapsedSeconds).toFixed(1)) : 0);
+
+          return {
+            ...prev,
+            elapsedSeconds: prev.elapsedSeconds + 1,
+            velocity: activeVelocity,
+          };
+        });
+      }, 1000);
+
+      return () => clearInterval(liveTicker);
+    }
+  }, [telemetry.status, isLiveMode]);
 
   const pauseExecution = () => {
     setTelemetry((prev) => ({ ...prev, status: 'paused', velocity: 0 }));
