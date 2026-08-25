@@ -1,5 +1,5 @@
 // Content script running inside X (Twitter) Web Interface
-// Autonomous Multi-Module Purge Engine with Jitter Pacing, Anti-Rogue Locks, and Resume Auto-Reload
+// Autonomous Multi-Module Purge Engine with Anti-Throttling Keepalive, Micro-Scrolling, and Zero-State Verification
 
 console.log('[VanishX Extension] Content script loaded on X.com');
 
@@ -7,17 +7,86 @@ console.log('[VanishX Extension] Content script loaded on X.com');
 let isRunning = false;
 let isPaused = false;
 let activePurgeConfig = null;
+let audioContextKeepalive = null;
 
-// Check on page load if an active purge task was in progress across navigation / resume reload
+// ==========================================
+// 0. ANTI-THROTTLING KEEPALIVE
+// ==========================================
+function startKeepalive() {
+  try {
+    if (!audioContextKeepalive) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        audioContextKeepalive = new AudioCtx();
+        const osc = audioContextKeepalive.createOscillator();
+        const gain = audioContextKeepalive.createGain();
+        gain.gain.value = 0.00001; // Inaudible
+        osc.connect(gain);
+        gain.connect(audioContextKeepalive.destination);
+        osc.start();
+      }
+    }
+    if (audioContextKeepalive && audioContextKeepalive.state === 'suspended') {
+      audioContextKeepalive.resume().catch(() => {});
+    }
+  } catch (e) {}
+}
+
+function stopKeepalive() {
+  try {
+    if (audioContextKeepalive) {
+      audioContextKeepalive.close().catch(() => {});
+      audioContextKeepalive = null;
+    }
+  } catch (e) {}
+}
+
+// Check on page load if an active purge or verification task was in progress
 chrome.storage.local.get(['vanishx_active_task'], (result) => {
   const activeTask = result?.vanishx_active_task;
+
+  // 1. Verification Pass Handler
+  if (activeTask && activeTask.status === 'verifying') {
+    console.log('[VanishX Extension] Executing Zero-State Verification Pass...');
+    startKeepalive();
+    setTimeout(async () => {
+      const isFollowing = activeTask.module === 'following';
+      let remainingCount = 0;
+
+      if (isFollowing) {
+        const cells = Array.from(document.querySelectorAll('[data-testid="UserCell"]'));
+        for (const cell of cells) {
+          const hasUnfollow = cell.querySelector('[data-testid$="-unfollow"]') ||
+            Array.from(cell.querySelectorAll('button')).some(b => b.textContent && b.textContent.trim() === 'Following');
+          if (hasUnfollow) remainingCount++;
+        }
+      } else {
+        const carets = document.querySelectorAll('[data-testid="caret"], [data-testid="unretweet"]');
+        remainingCount = carets.length;
+      }
+
+      if (remainingCount === 0) {
+        chrome.storage.local.remove('vanishx_active_task');
+        stopKeepalive();
+        sendLog('success', `🎉 Zero-State Verified: All targeted items completely cleared! (0 remaining)`);
+        sendTelemetryStatus('completed', activeTask.purgedCount || 0);
+      } else {
+        sendLog('info', `Found ${remainingCount} remaining items during verification. Cleaning up remaining accounts...`);
+        executePurgeLoop(activeTask.config);
+      }
+    }, 2500);
+    return;
+  }
+
+  // 2. Normal Running Task Resume
   if (activeTask && activeTask.status === 'running' && activeTask.config) {
     console.log('[VanishX Extension] Resuming active purge task from storage:', activeTask);
     isRunning = true;
     isPaused = false;
     activePurgeConfig = activeTask.config;
+    startKeepalive();
 
-    // If this was triggered by a Resume Reload, notify dashboard and start cleanly after DOM mounts
+    // If this was triggered by a Resume Reload, start cleanly after DOM mounts
     if (activeTask.resumeOnLoad) {
       chrome.storage.local.set({
         vanishx_active_task: { ...activeTask, resumeOnLoad: false }
@@ -36,20 +105,20 @@ chrome.storage.local.get(['vanishx_active_task'], (result) => {
       }, 1500);
     }
   } else {
-    // If not actively running, ensure flags remain idle
     isRunning = false;
     isPaused = false;
     activePurgeConfig = null;
+    stopKeepalive();
   }
 });
 
 // Listen for messages from background service worker / dashboard
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'GET_X_PROFILE') {
-    const handle = extractCurrentXHandle();
+    const profileStats = extractCurrentXProfileStats();
     sendResponse({
-      success: !!handle,
-      handle,
+      success: !!profileStats.handle,
+      ...profileStats,
       url: window.location.href,
     });
     return true;
@@ -60,6 +129,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     isRunning = true;
     isPaused = false;
     activePurgeConfig = request.config;
+    startKeepalive();
 
     // Persist active task state so navigation doesn't kill execution
     chrome.storage.local.set({
@@ -78,7 +148,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.type === 'PAUSE_CLIENT_PURGE') {
     isPaused = true;
-    // Update storage state while strictly preserving the existing config
+    stopKeepalive();
     chrome.storage.local.get(['vanishx_active_task'], (res) => {
       const existingConfig = res?.vanishx_active_task?.config || activePurgeConfig || {};
       chrome.storage.local.set({
@@ -96,6 +166,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'RESUME_CLIENT_PURGE') {
     isPaused = false;
     isRunning = true;
+    startKeepalive();
 
     if (request.reload) {
       sendLog('info', '🔄 Reloading 𝕏 tab to clear processed items from DOM...');
@@ -125,7 +196,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     isRunning = false;
     isPaused = false;
     activePurgeConfig = null;
-    // Immediate storage wipe prevents any rogue execution on later manual page refresh
+    stopKeepalive();
     chrome.storage.local.remove('vanishx_active_task');
     sendLog('warn', '⏹️ Purge execution aborted by user.');
     sendResponse({ status: 'stopped' });
@@ -134,60 +205,101 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // ==========================================
-// 1. ROBUST X PROFILE & HANDLE DETECTOR
+// 1. ROBUST X PROFILE & STATS SCRAPER
 // ==========================================
-function extractCurrentXHandle() {
-  // Strategy 1: SideNav account switcher button bottom-left
+function extractCurrentXProfileStats() {
+  let handle = '';
+  let name = '';
+  let avatarUrl = '';
+  let followingCount = 0;
+  let followersCount = 0;
+  let postsCount = 0;
+
+  // 1. Extract Handle
   const switcherSpan = document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"] span:last-child');
   if (switcherSpan && switcherSpan.textContent && switcherSpan.textContent.includes('@')) {
-    return switcherSpan.textContent.replace('@', '').trim();
+    handle = switcherSpan.textContent.replace('@', '').trim();
   }
 
-  // Strategy 2: Profile link in left sidebar (href="/username")
-  const profileLink = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]');
-  if (profileLink && profileLink.getAttribute('href')) {
-    const href = profileLink.getAttribute('href').replace('/', '').trim();
-    if (href && !['home', 'explore', 'notifications', 'messages', 'i', 'bookmarks'].includes(href)) {
-      return href;
-    }
-  }
-
-  // Strategy 3: User name metadata container in timeline/header
-  const userMeta = document.querySelector('[data-testid="UserName"]');
-  if (userMeta && userMeta.textContent) {
-    const match = userMeta.textContent.match(/@([a-zA-Z0-9_]{1,15})/);
-    if (match && match[1]) return match[1];
-  }
-
-  // Strategy 4: Fallback to current URL pathname if on /username
-  const pathname = window.location.pathname;
-  if (pathname.length > 1) {
-    const firstSegment = pathname.split('/')[1];
-    const reservedRoutes = ['home', 'explore', 'notifications', 'messages', 'bookmarks', 'settings', 'i', 'compose', 'search'];
-    if (firstSegment && !reservedRoutes.includes(firstSegment)) {
-      return firstSegment;
-    }
-  }
-
-  return '';
-}
-
-// Extract Ground Truth Following Count from profile DOM
-function extractGroundTruthFollowingCount() {
-  try {
-    const followingLink = document.querySelector('a[href$="/following"]');
-    if (followingLink) {
-      const text = followingLink.textContent || '';
-      const match = text.match(/([0-9,.]+[KMkm]?)\s*Following/i);
-      if (match && match[1]) {
-        const raw = match[1].replace(/,/g, '').toLowerCase();
-        if (raw.endsWith('k')) return Math.round(parseFloat(raw) * 1000);
-        if (raw.endsWith('m')) return Math.round(parseFloat(raw) * 1000000);
-        return parseInt(raw, 10);
+  if (!handle) {
+    const profileLink = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]');
+    if (profileLink && profileLink.getAttribute('href')) {
+      const href = profileLink.getAttribute('href').replace('/', '').trim();
+      if (href && !['home', 'explore', 'notifications', 'messages', 'i', 'bookmarks'].includes(href)) {
+        handle = href;
       }
     }
-  } catch (e) {}
-  return null;
+  }
+
+  if (!handle) {
+    const userMeta = document.querySelector('[data-testid="UserName"]');
+    if (userMeta && userMeta.textContent) {
+      const match = userMeta.textContent.match(/@([a-zA-Z0-9_]{1,15})/);
+      if (match && match[1]) handle = match[1];
+    }
+  }
+
+  if (!handle) {
+    const pathname = window.location.pathname;
+    if (pathname.length > 1) {
+      const firstSegment = pathname.split('/')[1];
+      const reserved = ['home', 'explore', 'notifications', 'messages', 'bookmarks', 'settings', 'i', 'compose', 'search'];
+      if (firstSegment && !reserved.includes(firstSegment)) {
+        handle = firstSegment;
+      }
+    }
+  }
+
+  // 2. Extract Display Name & Avatar
+  const avatarImg = document.querySelector('img[src*="profile_images"]');
+  if (avatarImg) {
+    avatarUrl = avatarImg.getAttribute('src') || '';
+    name = avatarImg.getAttribute('alt') || `@${handle}`;
+  }
+
+  // 3. Extract Following Count
+  const followingLink = document.querySelector('a[href$="/following"]');
+  if (followingLink) {
+    followingCount = parseStatNumber(followingLink.textContent || '');
+  }
+
+  // 4. Extract Followers Count
+  const followersLink = document.querySelector('a[href$="/verified_followers"], a[href$="/followers"]');
+  if (followersLink) {
+    followersCount = parseStatNumber(followersLink.textContent || '');
+  }
+
+  // 5. Extract Posts Count (e.g., from Profile Header "450 posts")
+  const headerDivs = Array.from(document.querySelectorAll('div[data-testid="primaryColumn"] h2 + div, div[dir="ltr"]'));
+  for (const div of headerDivs) {
+    const text = div.textContent || '';
+    if (text.toLowerCase().includes('post') || text.toLowerCase().includes('tweet')) {
+      const parsed = parseStatNumber(text);
+      if (parsed > 0) {
+        postsCount = parsed;
+        break;
+      }
+    }
+  }
+
+  return {
+    handle,
+    name: name || `@${handle}`,
+    avatarUrl,
+    followingCount,
+    followersCount,
+    postsCount,
+  };
+}
+
+function parseStatNumber(text) {
+  if (!text) return 0;
+  const match = text.match(/([0-9,.]+[KMkm]?)/);
+  if (!match || !match[1]) return 0;
+  const raw = match[1].replace(/,/g, '').toLowerCase();
+  if (raw.endsWith('k')) return Math.round(parseFloat(raw) * 1000);
+  if (raw.endsWith('m')) return Math.round(parseFloat(raw) * 1000000);
+  return parseInt(raw, 10) || 0;
 }
 
 // Check for X Rate Limits / Anti-Spam Warnings in DOM
@@ -202,14 +314,27 @@ function checkRateLimitWarning() {
   );
 }
 
+// Micro-scroll down in 3 smooth intervals to give X virtual DOM time to render
+async function microScrollDown(distance = 450) {
+  const steps = 3;
+  const stepDist = distance / steps;
+  for (let i = 0; i < steps; i++) {
+    window.scrollBy(0, stepDist);
+    await delay(120);
+  }
+  await delay(650); // DOM mount grace period
+}
+
 // ==========================================
 // 2. MAIN PURGE ORCHESTRATOR
 // ==========================================
 async function executePurgeLoop(config) {
   isRunning = true;
   isPaused = false;
+  startKeepalive();
 
-  const handle = config.handle || extractCurrentXHandle();
+  const stats = extractCurrentXProfileStats();
+  const handle = config.handle || stats.handle;
   if (!handle) {
     sendLog('error', 'Could not detect active 𝕏 handle. Please open your profile page.');
     chrome.storage.local.remove('vanishx_active_task');
@@ -232,7 +357,7 @@ async function executePurgeLoop(config) {
       return; // Will resume automatically after navigation via storage
     }
 
-    await runFollowingPurge(config, whitelistUsers);
+    await runFollowingPurge(config, whitelistUsers, stats.followingCount);
     if (!isRunning) return;
   }
 
@@ -281,6 +406,7 @@ async function executePurgeLoop(config) {
   // Finished all tasks
   if (isRunning) {
     chrome.storage.local.remove('vanishx_active_task');
+    stopKeepalive();
     sendLog('success', '✔ VanishX execution completed successfully.');
   }
 }
@@ -288,14 +414,15 @@ async function executePurgeLoop(config) {
 // ==========================================
 // 3. FOLLOWING PURGE ENGINE
 // ==========================================
-async function runFollowingPurge(config, whitelistUsers) {
+async function runFollowingPurge(config, whitelistUsers, initialTargetCount = 0) {
   sendLog('info', '👥 [Following Engine] Scanning following list...');
-  await delay(2500);
+  await delay(2000);
 
   // Broadcast ground truth target count if available
-  const groundTruthCount = extractGroundTruthFollowingCount();
-  if (groundTruthCount !== null && groundTruthCount > 0) {
-    sendLog('info', `📊 Target Account Ground Truth: ${groundTruthCount} Following accounts detected.`);
+  const currentStats = extractCurrentXProfileStats();
+  const groundTruthCount = currentStats.followingCount || initialTargetCount;
+  if (groundTruthCount > 0) {
+    sendLog('info', `📊 Target Ground Truth: ${groundTruthCount} Following accounts detected.`);
     sendTelemetryWithTarget('info', `Target sync: ${groundTruthCount} accounts`, groundTruthCount);
   }
 
@@ -304,7 +431,7 @@ async function runFollowingPurge(config, whitelistUsers) {
   let consecutiveEmptyPasses = 0;
   const processedHandles = new Set();
 
-  while (isRunning && consecutiveEmptyPasses < 5 && unfollowedCount < 1000) {
+  while (isRunning && consecutiveEmptyPasses < 4 && unfollowedCount < 1000) {
     // Check Pause State
     while (isPaused && isRunning) {
       await delay(400);
@@ -323,16 +450,14 @@ async function runFollowingPurge(config, whitelistUsers) {
 
     if (userCells.length === 0) {
       consecutiveEmptyPasses++;
-      sendLog('info', `Scrolling to load more following accounts (${consecutiveEmptyPasses}/5)...`);
-      window.scrollBy(0, window.innerHeight * 1.5);
-      await delay(1800);
+      sendLog('info', `Scrolling to load more following accounts (${consecutiveEmptyPasses}/4)...`);
+      await microScrollDown(450);
       continue;
     }
 
     let unfollowedInPass = 0;
 
     for (const cell of userCells) {
-      // Check Pause / Stop State before each user cell
       while (isPaused && isRunning) {
         await delay(400);
       }
@@ -358,8 +483,6 @@ async function runFollowingPurge(config, whitelistUsers) {
       }
 
       // Check relationship rule
-      // 'aggressive' / 'all': unfollow 100% of non-whitelisted
-      // 'non_mutuals_only': check if "Follows you" badge exists
       if (botPreset === 'non_mutuals_only') {
         const followsYouBadge = cell.querySelector('[data-testid="userFollowIndicator"]');
         const textContent = cell.textContent || '';
@@ -370,7 +493,7 @@ async function runFollowingPurge(config, whitelistUsers) {
         }
       }
 
-      // STRICT SAFEGUARD: Find candidate button and strictly reject any "Follow" buttons
+      // STRICT SAFEGUARD: Reject "Follow" buttons, accept only active relationships
       const buttons = Array.from(cell.querySelectorAll('button, div[role="button"]'));
       let unfollowBtn = null;
 
@@ -379,12 +502,10 @@ async function runFollowingPurge(config, whitelistUsers) {
         const testId = btn.getAttribute('data-testid') || '';
         const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
 
-        // STRICT REJECTION: If button says "Follow" or is a follow button, NEVER TOUCH IT!
         if (text === 'Follow' || testId.endsWith('-follow') || (ariaLabel.startsWith('follow @') && !ariaLabel.includes('following'))) {
           continue;
         }
 
-        // STRICT ACCEPTANCE: Only if it represents an active following relationship
         if (
           testId.endsWith('-unfollow') ||
           text === 'Following' ||
@@ -401,11 +522,9 @@ async function runFollowingPurge(config, whitelistUsers) {
       }
 
       try {
-        // 1. Click unfollow trigger
         unfollowBtn.click();
         await delay(350);
 
-        // 2. Click confirm dialog
         const confirmBtn = document.querySelector('[data-testid="confirmationSheetConfirm"]');
         if (confirmBtn) {
           confirmBtn.click();
@@ -415,7 +534,6 @@ async function runFollowingPurge(config, whitelistUsers) {
 
           sendLog('unfollow', `👋 Unfollowed @${targetHandle} (#${unfollowedCount})`);
           
-          // Human-mimicking jitter delay
           const jitterDelay = calculateJitter(config.pacing || 'balanced');
           await delay(jitterDelay);
         }
@@ -426,16 +544,29 @@ async function runFollowingPurge(config, whitelistUsers) {
 
     if (!isRunning) break;
 
-    // Scroll down to fetch next dynamic batch
-    window.scrollBy(0, window.innerHeight * 1.5);
-    await delay(1800);
+    // Incremental Micro-Scroll
+    await microScrollDown(450);
 
-    // Check for empty state
     const emptyState = document.querySelector('[data-testid="emptyState"], [data-testid="empty_timeline"]');
     if (emptyState && unfollowedInPass === 0) {
-      sendLog('info', '✨ Reached end of Following list (Zero accounts remaining).');
-      break;
+      consecutiveEmptyPasses++;
     }
+  }
+
+  // Zero-State Verification Pass
+  if (isRunning && unfollowedCount > 0) {
+    sendLog('info', '🔍 Triggering Zero-State Verification reload (Confirming 0 remaining accounts)...');
+    chrome.storage.local.set({
+      vanishx_active_task: {
+        status: 'verifying',
+        config,
+        module: 'following',
+        purgedCount: unfollowedCount,
+      }
+    }, () => {
+      window.location.reload();
+    });
+    return;
   }
 
   if (isRunning) {
@@ -448,19 +579,18 @@ async function runFollowingPurge(config, whitelistUsers) {
 // ==========================================
 async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts: false }) {
   sendLog('info', '🗑️ [Timeline Engine] Scanning posts and replies...');
-  await delay(2500);
+  await delay(2000);
 
   const keywords = (config.whitelist?.keywords || []).map(k => k.toLowerCase().trim());
   let purgedCount = 0;
   let emptyScrolls = 0;
 
-  while (isRunning && emptyScrolls < 5 && purgedCount < 500) {
+  while (isRunning && emptyScrolls < 4 && purgedCount < 500) {
     while (isPaused && isRunning) {
       await delay(400);
     }
     if (!isRunning) break;
 
-    // Check Anti-Spam Rate Limits
     if (checkRateLimitWarning()) {
       sendLog('warn', '⚠️ 𝕏 Rate Limit Alert detected! Pausing for 45s safety cooldown...');
       await delay(45000);
@@ -468,7 +598,7 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
       return;
     }
 
-    // 1. Check for Un-Retweet buttons first
+    // 1. Check for Un-Retweet buttons
     if (config.modules?.reposts || options.onlyReposts) {
       const unretweetBtns = Array.from(document.querySelectorAll('[data-testid="unretweet"]'));
       for (const btn of unretweetBtns) {
@@ -496,8 +626,7 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
     }
 
     if (options.onlyReposts) {
-      window.scrollBy(0, window.innerHeight * 1.5);
-      await delay(1800);
+      await microScrollDown(450);
       continue;
     }
 
@@ -506,9 +635,8 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
 
     if (carets.length === 0) {
       emptyScrolls++;
-      sendLog('info', `Scrolling timeline for next batch of posts (${emptyScrolls}/5)...`);
-      window.scrollBy(0, window.innerHeight * 1.5);
-      await delay(1800);
+      sendLog('info', `Scrolling timeline for next batch of posts (${emptyScrolls}/4)...`);
+      await microScrollDown(450);
       continue;
     }
 
@@ -520,7 +648,6 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
         await delay(400);
       }
 
-      // Find parent tweet element to check keyword whitelist
       const tweetArticle = caret.closest('article[data-testid="tweet"]');
       if (tweetArticle) {
         const text = tweetArticle.textContent?.toLowerCase() || '';
@@ -533,15 +660,13 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
 
       try {
         caret.click();
-        await delay(400);
+        await delay(350);
 
-        // Check for Delete option in dropdown
         const deleteOption = document.querySelector('[data-testid="Dropdown"] [role="menuitem"]');
         if (deleteOption && deleteOption.textContent && deleteOption.textContent.toLowerCase().includes('delete')) {
           deleteOption.click();
-          await delay(400);
+          await delay(350);
 
-          // Confirm delete modal
           const confirmBtn = document.querySelector('[data-testid="confirmationSheetConfirm"]');
           if (confirmBtn) {
             confirmBtn.click();
@@ -555,26 +680,40 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
           }
         } else {
           document.body.click();
-          await delay(250);
+          await delay(200);
         }
       } catch (err) {
         console.error('[VanishX] Error deleting item:', err);
         document.body.click();
-        await delay(250);
+        await delay(200);
       }
     }
 
     if (!isRunning) break;
 
-    // Scroll down for next batch
-    window.scrollBy(0, window.innerHeight * 1.5);
-    await delay(1800);
+    // Incremental Micro-Scroll
+    await microScrollDown(450);
 
     const emptyState = document.querySelector('[data-testid="emptyState"], [data-testid="empty_timeline"]');
     if (emptyState && deletedInPass === 0) {
-      sendLog('info', '✨ Reached end of timeline items.');
-      break;
+      emptyScrolls++;
     }
+  }
+
+  // Zero-State Verification Pass
+  if (isRunning && purgedCount > 0) {
+    sendLog('info', '🔍 Triggering Zero-State Verification reload (Confirming 0 remaining posts)...');
+    chrome.storage.local.set({
+      vanishx_active_task: {
+        status: 'verifying',
+        config,
+        module: 'timeline',
+        purgedCount,
+      }
+    }, () => {
+      window.location.reload();
+    });
+    return;
   }
 
   if (isRunning) {
@@ -586,9 +725,6 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
 // 5. UTILITIES & JITTER PACING
 // ==========================================
 function calculateJitter(pacing) {
-  // Safe: 2500ms - 4500ms randomized
-  // Balanced: 1200ms - 2500ms randomized
-  // Turbo: 700ms - 1200ms randomized
   let min = 1200;
   let max = 2500;
 
@@ -624,6 +760,20 @@ function sendTelemetryWithTarget(type, message, totalTargeted) {
       timestamp: new Date().toLocaleTimeString(),
       type,
       message,
+    }
+  }).catch(() => {});
+}
+
+function sendTelemetryStatus(status, totalPurged) {
+  chrome.runtime.sendMessage({
+    type: 'TELEMETRY_LOG_EVENT',
+    status,
+    totalPurged,
+    log: {
+      id: Math.random().toString(36).substring(2, 9),
+      timestamp: new Date().toLocaleTimeString(),
+      type: 'success',
+      message: `✔ Zero-state verification complete: 0 items remaining. Total purged: ${totalPurged}`,
     }
   }).catch(() => {});
 }

@@ -35,6 +35,11 @@ window.addEventListener('message', (event) => {
       window.postMessage({
         type: 'VANISHX_X_PROFILE_RESPONSE',
         handle: response?.handle || '',
+        name: response?.name || '',
+        avatarUrl: response?.avatarUrl || '',
+        followingCount: response?.followingCount || 0,
+        followersCount: response?.followersCount || 0,
+        postsCount: response?.postsCount || 0,
         url: response?.url || '',
       }, '*');
     });
@@ -79,6 +84,8 @@ chrome.runtime.onMessage.addListener((request) => {
     window.postMessage({
       type: 'VANISHX_TELEMETRY_LOG',
       log: request.log,
+      status: request.status,
+      totalPurged: request.totalPurged,
       totalTargeted: request.totalTargeted,
     }, '*');
   }

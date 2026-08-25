@@ -143,9 +143,23 @@ export default function AppPage() {
         setExtensionDetected(true);
         if (event.data.handle) {
           const h = event.data.handle;
+          const following = Number(event.data.followingCount) || 0;
+          const followers = Number(event.data.followersCount) || 0;
+          const posts = Number(event.data.postsCount) || 0;
+          const name = event.data.name || `@${h}`;
+          const avatarUrl = event.data.avatarUrl || '';
+
           setActiveHandle(h);
           setHandleInput(h);
-          setProfile((prev) => ({ ...prev, handle: h, name: `@${h}` }));
+          setProfile((prev) => ({
+            ...prev,
+            handle: h,
+            name,
+            avatarUrl: avatarUrl || prev.avatarUrl,
+            followingCount: following || prev.followingCount,
+            followersCount: followers || prev.followersCount,
+            postsCount: posts || prev.postsCount,
+          }));
           setIsLiveMode(true);
           localStorage.setItem('vanishx_active_handle', h);
         }
@@ -153,6 +167,8 @@ export default function AppPage() {
       if (event.data?.type === 'VANISHX_TELEMETRY_LOG' && event.data.log) {
         const log = event.data.log;
         const newTarget = event.data.totalTargeted;
+        const newStatus = event.data.status;
+        const totalPurgedOverride = event.data.totalPurged;
         const isAction = log.type === 'unfollow' || log.type === 'delete' || log.type === 'repost';
 
         let newVelocity = 0;
@@ -170,17 +186,19 @@ export default function AppPage() {
           const isReply = log.type === 'reply' || log.message?.toLowerCase().includes('reply');
           const isWhitelisted = log.type === 'whitelist' || log.message?.toLowerCase().includes('whitelisted') || log.message?.toLowerCase().includes('skipped');
 
+          const isComplete = newStatus === 'completed' || log.type === 'success';
+
           return {
             ...prev,
-            status: log.type === 'success' ? 'completed' : prev.status,
+            status: isComplete ? 'completed' : prev.status,
             totalTargeted: newTarget && newTarget > 0 ? newTarget : prev.totalTargeted,
-            totalPurged: prev.totalPurged + (isUnfollow || isDelete || isRepost ? 1 : 0),
+            totalPurged: totalPurgedOverride !== undefined ? totalPurgedOverride : prev.totalPurged + (isUnfollow || isDelete || isRepost ? 1 : 0),
             followingRemoved: prev.followingRemoved + (isUnfollow ? 1 : 0),
             postsDeleted: prev.postsDeleted + (isDelete && !isReply ? 1 : 0),
             repliesDeleted: prev.repliesDeleted + (isReply ? 1 : 0),
             repostsUndone: prev.repostsUndone + (isRepost ? 1 : 0),
             whitelistSkipped: prev.whitelistSkipped + (isWhitelisted ? 1 : 0),
-            velocity: isAction ? Math.max(newVelocity, 0.4) : prev.velocity,
+            velocity: isComplete ? 0 : (isAction ? Math.max(newVelocity, 0.4) : prev.velocity),
             logs: [...prev.logs.slice(-80), log],
           };
         });
@@ -391,17 +409,21 @@ export default function AppPage() {
     }
 
     setActiveTab('telemetry');
-    let targetedCount = 100;
-    if (isLiveMode) {
-      if (config.modules.following && profile.followingCount > 0) {
-        targetedCount = profile.followingCount;
-      } else if (config.modules.posts && profile.postsCount > 0) {
-        targetedCount = profile.postsCount;
-      } else {
-        targetedCount = config.modules.following ? 150 : 50;
-      }
-    } else {
-      targetedCount = config.modules.following ? 120 : 65;
+    let targetedCount = 0;
+    if (config.modules.following && profile.followingCount > 0) {
+      targetedCount += profile.followingCount;
+    }
+    if (config.modules.posts && profile.postsCount > 0) {
+      targetedCount += profile.postsCount;
+    }
+    if (config.modules.replies && profile.repliesCount > 0) {
+      targetedCount += profile.repliesCount;
+    }
+    if (config.modules.reposts && profile.repostsCount > 0) {
+      targetedCount += profile.repostsCount;
+    }
+    if (targetedCount === 0) {
+      targetedCount = profile.followingCount || profile.postsCount || 0;
     }
 
     setTelemetry((prev) => ({
