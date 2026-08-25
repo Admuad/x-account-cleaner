@@ -21,10 +21,12 @@ export const TerminalConsole: React.FC<TerminalConsoleProps> = ({
   onAbort,
   onExportReport,
 }) => {
-  const terminalEndRef = useRef<HTMLDivElement>(null);
+  const terminalViewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (terminalViewportRef.current) {
+      terminalViewportRef.current.scrollTop = terminalViewportRef.current.scrollHeight;
+    }
   }, [telemetry.logs]);
 
   const progressPercent = telemetry.totalTargeted > 0
@@ -179,7 +181,10 @@ export const TerminalConsole: React.FC<TerminalConsoleProps> = ({
       </div>
 
       {/* Terminal Viewport */}
-      <div className="bg-space-darkest rounded-lg border border-space-border p-3 font-mono text-xs h-64 overflow-y-auto space-y-1.5 shadow-inner-dark">
+      <div
+        ref={terminalViewportRef}
+        className="bg-space-darkest rounded-lg border border-space-border p-3 font-mono text-xs h-64 overflow-y-auto space-y-1.5 shadow-inner-dark"
+      >
         {telemetry.logs.length === 0 ? (
           <div className="text-space-muted italic text-center py-20">
             Engine standby. Click "Execute Clean Sweep" to start telemetry stream...
@@ -221,7 +226,6 @@ export const TerminalConsole: React.FC<TerminalConsoleProps> = ({
             </div>
           ))
         )}
-        <div ref={terminalEndRef} />
       </div>
     </div>
   );

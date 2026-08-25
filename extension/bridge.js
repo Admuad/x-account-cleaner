@@ -11,7 +11,6 @@ function announceReady() {
 }
 
 // Fire immediately, then once more after a short delay to handle race conditions
-// where the web app registers its listener after document_idle fires.
 announceReady();
 setTimeout(announceReady, 800);
 setTimeout(announceReady, 2000);
@@ -20,12 +19,13 @@ setTimeout(announceReady, 2000);
 window.addEventListener('message', (event) => {
   if (event.source !== window || !event.data || !event.data.type) return;
 
-  // Web app requesting extension presence check
+  // 1. Web app pinging extension presence
   if (event.data.type === 'VANISHX_PING') {
     announceReady();
     return;
   }
 
+  // 2. Query active X profile
   if (event.data.type === 'VANISHX_GET_X_PROFILE') {
     chrome.runtime.sendMessage({ type: 'GET_X_PROFILE' }, (response) => {
       if (chrome.runtime.lastError) {
@@ -40,6 +40,7 @@ window.addEventListener('message', (event) => {
     });
   }
 
+  // 3. Start purge
   if (event.data.type === 'VANISHX_START_PURGE') {
     chrome.runtime.sendMessage({
       type: 'START_CLIENT_PURGE',
@@ -52,14 +53,30 @@ window.addEventListener('message', (event) => {
       }, '*');
     });
   }
+
+  // 4. Pause purge
+  if (event.data.type === 'VANISHX_PAUSE_PURGE') {
+    chrome.runtime.sendMessage({ type: 'PAUSE_CLIENT_PURGE' });
+  }
+
+  // 5. Resume purge
+  if (event.data.type === 'VANISHX_RESUME_PURGE') {
+    chrome.runtime.sendMessage({ type: 'RESUME_CLIENT_PURGE' });
+  }
+
+  // 6. Stop / Abort purge
+  if (event.data.type === 'VANISHX_STOP_PURGE') {
+    chrome.runtime.sendMessage({ type: 'STOP_CLIENT_PURGE' });
+  }
 });
 
-// Relay telemetry from background → web app
+// Relay telemetry & events from background worker → web app
 chrome.runtime.onMessage.addListener((request) => {
   if (request.type === 'TELEMETRY_LOG_EVENT') {
     window.postMessage({
       type: 'VANISHX_TELEMETRY_LOG',
       log: request.log,
+      totalTargeted: request.totalTargeted,
     }, '*');
   }
 });

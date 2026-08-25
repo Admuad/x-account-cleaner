@@ -3,6 +3,10 @@
 
 console.log('[VanishX Extension] Content script loaded on X.com');
 
+// Global execution control flags
+let isRunning = false;
+let isPaused = false;
+
 // Check on page load if an active purge task was in progress across navigation
 chrome.storage.local.get(['vanishx_active_task'], (result) => {
   if (result?.vanishx_active_task?.status === 'running') {
@@ -25,6 +29,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.type === 'START_CLIENT_PURGE') {
     console.log('[VanishX Extension] Starting purge loop with config:', request.config);
+    isRunning = true;
+    isPaused = false;
+
     // Persist active task state so navigation doesn't kill execution
     chrome.storage.local.set({
       vanishx_active_task: {
@@ -39,9 +46,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.type === 'PAUSE_CLIENT_PURGE') {
+    isPaused = true;
+    sendLog('warn', '⏸️ Purge execution paused by user.');
+    sendResponse({ status: 'paused' });
+    return true;
+  }
+
+  if (request.type === 'RESUME_CLIENT_PURGE') {
+    isPaused = false;
+    sendLog('info', '▶️ Purge execution resumed by user.');
+    sendResponse({ status: 'resumed' });
+    return true;
+  }
+
   if (request.type === 'STOP_CLIENT_PURGE') {
+    isRunning = false;
+    isPaused = false;
     chrome.storage.local.remove('vanishx_active_task');
-    sendLog('warn', 'Purge execution stopped by user.');
+    sendLog('warn', '⏹️ Purge execution aborted by user.');
     sendResponse({ status: 'stopped' });
     return true;
   }
@@ -86,10 +109,31 @@ function extractCurrentXHandle() {
   return '';
 }
 
+// Extract Ground Truth Following Count from profile DOM
+function extractGroundTruthFollowingCount() {
+  try {
+    const followingLink = document.querySelector('a[href$="/following"]');
+    if (followingLink) {
+      const text = followingLink.textContent || '';
+      const match = text.match(/([0-9,.]+[KMkm]?)\s*Following/i);
+      if (match && match[1]) {
+        const raw = match[1].replace(/,/g, '').toLowerCase();
+        if (raw.endsWith('k')) return Math.round(parseFloat(raw) * 1000);
+        if (raw.endsWith('m')) return Math.round(parseFloat(raw) * 1000000);
+        return parseInt(raw, 10);
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 // ==========================================
 // 2. MAIN PURGE ORCHESTRATOR
 // ==========================================
 async function executePurgeLoop(config) {
+  isRunning = true;
+  isPaused = false;
+
   const handle = config.handle || extractCurrentXHandle();
   if (!handle) {
     sendLog('error', 'Could not detect active 𝕏 handle. Please open your profile page.');
@@ -114,12 +158,13 @@ async function executePurgeLoop(config) {
     }
 
     await runFollowingPurge(config, whitelistUsers);
+    if (!isRunning) return;
   }
 
   // ----------------------------------------
   // MODULE B: REPOSTS (UN-RETWEET)
   // ----------------------------------------
-  if (modules.reposts && !modules.posts && !modules.replies) {
+  if (modules.reposts && !modules.posts && !modules.replies && isRunning) {
     const targetProfileUrl = `https://x.com/${handle}`;
     if (!window.location.href.toLowerCase().endsWith(`/${handle.toLowerCase()}`)) {
       sendLog('info', `Navigating to Timeline for Reposts: ${targetProfileUrl}`);
@@ -128,13 +173,13 @@ async function executePurgeLoop(config) {
     }
 
     await runTimelinePurge(config, whitelistUsers, { onlyReposts: true });
+    if (!isRunning) return;
   }
 
   // ----------------------------------------
   // MODULE C: POSTS & REPLIES
   // ----------------------------------------
-  if (modules.posts || modules.replies) {
-    // If date filter is enabled, use X Search query
+  if ((modules.posts || modules.replies) && isRunning) {
     let targetUrl = `https://x.com/${handle}`;
     if (modules.replies && !modules.posts) {
       targetUrl = `https://x.com/${handle}/with_replies`;
@@ -159,8 +204,10 @@ async function executePurgeLoop(config) {
   }
 
   // Finished all tasks
-  chrome.storage.local.remove('vanishx_active_task');
-  sendLog('success', '✔ VanishX execution completed successfully.');
+  if (isRunning) {
+    chrome.storage.local.remove('vanishx_active_task');
+    sendLog('success', '✔ VanishX execution completed successfully.');
+  }
 }
 
 // ==========================================
@@ -170,13 +217,26 @@ async function runFollowingPurge(config, whitelistUsers) {
   sendLog('info', '👥 [Following Engine] Scanning following list...');
   await delay(2500);
 
+  // Broadcast ground truth target count if available
+  const groundTruthCount = extractGroundTruthFollowingCount();
+  if (groundTruthCount !== null && groundTruthCount > 0) {
+    sendLog('info', `📊 Target Account Ground Truth: ${groundTruthCount} Following accounts detected.`);
+    sendTelemetryWithTarget('info', `Target sync: ${groundTruthCount} accounts`, groundTruthCount);
+  }
+
   const pacingMs = config.pacing === 'turbo' ? 450 : config.pacing === 'balanced' ? 900 : 1800;
   const botPreset = config.botFilter?.preset || 'aggressive'; // 'aggressive' = Unfollow All
   let unfollowedCount = 0;
   let consecutiveEmptyPasses = 0;
   const processedHandles = new Set();
 
-  while (consecutiveEmptyPasses < 5 && unfollowedCount < 1000) {
+  while (isRunning && consecutiveEmptyPasses < 5 && unfollowedCount < 1000) {
+    // Check Pause State
+    while (isPaused && isRunning) {
+      await delay(400);
+    }
+    if (!isRunning) break;
+
     const userCells = Array.from(document.querySelectorAll('[data-testid="UserCell"]'));
 
     if (userCells.length === 0) {
@@ -190,6 +250,12 @@ async function runFollowingPurge(config, whitelistUsers) {
     let unfollowedInPass = 0;
 
     for (const cell of userCells) {
+      // Check Pause / Stop State before each user cell
+      while (isPaused && isRunning) {
+        await delay(400);
+      }
+      if (!isRunning) break;
+
       // Extract handle
       const link = cell.querySelector('a[role="link"][href^="/"]');
       let targetHandle = '';
@@ -222,9 +288,31 @@ async function runFollowingPurge(config, whitelistUsers) {
         }
       }
 
-      // Locate Unfollow button (black/white button with "Following" text)
-      const unfollowBtn = cell.querySelector('button[data-testid$="-unfollow"]') ||
-        Array.from(cell.querySelectorAll('button')).find(b => b.textContent && b.textContent.trim() === 'Following');
+      // STRICT SAFEGUARD: Find candidate button and strictly reject any "Follow" buttons
+      const buttons = Array.from(cell.querySelectorAll('button, div[role="button"]'));
+      let unfollowBtn = null;
+
+      for (const btn of buttons) {
+        const text = (btn.textContent || '').trim();
+        const testId = btn.getAttribute('data-testid') || '';
+        const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+
+        // STRICT REJECTION: If button says "Follow" or is a follow button, NEVER TOUCH IT!
+        if (text === 'Follow' || testId.endsWith('-follow') || (ariaLabel.startsWith('follow @') && !ariaLabel.includes('following'))) {
+          continue;
+        }
+
+        // STRICT ACCEPTANCE: Only if it represents an active following relationship
+        if (
+          testId.endsWith('-unfollow') ||
+          text === 'Following' ||
+          ariaLabel.includes('following') ||
+          ariaLabel.includes('unfollow')
+        ) {
+          unfollowBtn = btn;
+          break;
+        }
+      }
 
       if (!unfollowBtn) {
         continue;
@@ -251,6 +339,8 @@ async function runFollowingPurge(config, whitelistUsers) {
       }
     }
 
+    if (!isRunning) break;
+
     // Scroll down to fetch next dynamic batch
     window.scrollBy(0, window.innerHeight * 1.5);
     await delay(1500);
@@ -263,7 +353,9 @@ async function runFollowingPurge(config, whitelistUsers) {
     }
   }
 
-  sendLog('success', `✔ Completed Following Purge: ${unfollowedCount} accounts unfollowed.`);
+  if (isRunning) {
+    sendLog('success', `✔ Completed Following Purge: ${unfollowedCount} accounts unfollowed.`);
+  }
 }
 
 // ==========================================
@@ -278,11 +370,20 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
   let purgedCount = 0;
   let emptyScrolls = 0;
 
-  while (emptyScrolls < 5 && purgedCount < 500) {
+  while (isRunning && emptyScrolls < 5 && purgedCount < 500) {
+    while (isPaused && isRunning) {
+      await delay(400);
+    }
+    if (!isRunning) break;
+
     // 1. Check for Un-Retweet buttons first
     if (config.modules?.reposts || options.onlyReposts) {
       const unretweetBtns = Array.from(document.querySelectorAll('[data-testid="unretweet"]'));
       for (const btn of unretweetBtns) {
+        if (!isRunning) break;
+        while (isPaused && isRunning) {
+          await delay(400);
+        }
         try {
           btn.click();
           await delay(350);
@@ -320,6 +421,11 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
     let deletedInPass = 0;
 
     for (const caret of carets) {
+      if (!isRunning) break;
+      while (isPaused && isRunning) {
+        await delay(400);
+      }
+
       // Find parent tweet element to check keyword whitelist
       const tweetArticle = caret.closest('article[data-testid="tweet"]');
       if (tweetArticle) {
@@ -352,7 +458,6 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
             await delay(pacingMs);
           }
         } else {
-          // Close dropdown if it's someone else's tweet (e.g. on search feed)
           document.body.click();
           await delay(250);
         }
@@ -362,6 +467,8 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
         await delay(250);
       }
     }
+
+    if (!isRunning) break;
 
     // Scroll down for next batch
     window.scrollBy(0, window.innerHeight * 1.5);
@@ -374,7 +481,9 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
     }
   }
 
-  sendLog('success', `✔ Completed Timeline Purge: ${purgedCount} items removed.`);
+  if (isRunning) {
+    sendLog('success', `✔ Completed Timeline Purge: ${purgedCount} items removed.`);
+  }
 }
 
 // ==========================================
@@ -383,6 +492,19 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
 function sendLog(type, message) {
   chrome.runtime.sendMessage({
     type: 'TELEMETRY_LOG_EVENT',
+    log: {
+      id: Math.random().toString(36).substring(2, 9),
+      timestamp: new Date().toLocaleTimeString(),
+      type,
+      message,
+    }
+  }).catch(() => {});
+}
+
+function sendTelemetryWithTarget(type, message, totalTargeted) {
+  chrome.runtime.sendMessage({
+    type: 'TELEMETRY_LOG_EVENT',
+    totalTargeted,
     log: {
       id: Math.random().toString(36).substring(2, 9),
       timestamp: new Date().toLocaleTimeString(),

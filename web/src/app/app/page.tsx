@@ -151,6 +151,7 @@ export default function AppPage() {
       }
       if (event.data?.type === 'VANISHX_TELEMETRY_LOG' && event.data.log) {
         const log = event.data.log;
+        const newTarget = event.data.totalTargeted;
         setTelemetry((prev) => {
           const isUnfollow = log.type === 'unfollow';
           const isDelete = log.type === 'delete';
@@ -161,6 +162,7 @@ export default function AppPage() {
           return {
             ...prev,
             status: log.type === 'success' ? 'completed' : prev.status,
+            totalTargeted: newTarget && newTarget > 0 ? newTarget : prev.totalTargeted,
             totalPurged: prev.totalPurged + (isUnfollow || isDelete || isRepost ? 1 : 0),
             followingRemoved: prev.followingRemoved + (isUnfollow ? 1 : 0),
             postsDeleted: prev.postsDeleted + (isDelete && !isReply ? 1 : 0),
@@ -378,7 +380,18 @@ export default function AppPage() {
     }
 
     setActiveTab('telemetry');
-    const targetedCount = isLiveMode ? 45 : (config.modules.following ? 120 : 65);
+    let targetedCount = 100;
+    if (isLiveMode) {
+      if (config.modules.following && profile.followingCount > 0) {
+        targetedCount = profile.followingCount;
+      } else if (config.modules.posts && profile.postsCount > 0) {
+        targetedCount = profile.postsCount;
+      } else {
+        targetedCount = config.modules.following ? 150 : 50;
+      }
+    } else {
+      targetedCount = config.modules.following ? 120 : 65;
+    }
 
     setTelemetry((prev) => ({
       ...prev,
@@ -516,10 +529,25 @@ export default function AppPage() {
     };
   }, [telemetry.status, config.pacing, config.modules]);
 
-  const pauseExecution = () => setTelemetry((prev) => ({ ...prev, status: 'paused', velocity: 0 }));
-  const resumeExecution = () => setTelemetry((prev) => ({ ...prev, status: 'running' }));
+  const pauseExecution = () => {
+    setTelemetry((prev) => ({ ...prev, status: 'paused', velocity: 0 }));
+    if (isLiveMode) {
+      window.postMessage({ type: 'VANISHX_PAUSE_PURGE' }, '*');
+    }
+  };
+
+  const resumeExecution = () => {
+    setTelemetry((prev) => ({ ...prev, status: 'running' }));
+    if (isLiveMode) {
+      window.postMessage({ type: 'VANISHX_RESUME_PURGE' }, '*');
+    }
+  };
+
   const abortExecution = () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    if (isLiveMode) {
+      window.postMessage({ type: 'VANISHX_STOP_PURGE' }, '*');
+    }
     setTelemetry((prev) => ({
       ...prev,
       status: 'aborted',

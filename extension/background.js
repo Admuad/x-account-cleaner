@@ -20,7 +20,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       
-      // Select the active X tab if available, otherwise the first X tab
       const activeXTab = tabs.find(t => t.active) || tabs[0];
       chrome.tabs.sendMessage(activeXTab.id, { type: 'GET_X_PROFILE' }, (response) => {
         if (chrome.runtime.lastError) {
@@ -30,10 +29,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       });
     });
-    return true; // Keep channel open for async response
+    return true;
   }
 
-  // 3. Dispatch / Start Client-Side Purge Loop
+  // 3. Start / Resume Purge Task
   if (message.type === 'START_CLIENT_PURGE' || message.type === 'DISPATCH_PURGE_TASK') {
     chrome.tabs.query({ url: ['*://*.x.com/*', '*://*.twitter.com/*'] }, (tabs) => {
       if (!tabs || tabs.length === 0) {
@@ -53,7 +52,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // 4. Telemetry Log Event — broadcast from content.js to all web dashboard tabs
+  // 4. Pause Purge Task
+  if (message.type === 'PAUSE_CLIENT_PURGE') {
+    chrome.tabs.query({ url: ['*://*.x.com/*', '*://*.twitter.com/*'] }, (tabs) => {
+      for (const t of tabs) {
+        chrome.tabs.sendMessage(t.id, { type: 'PAUSE_CLIENT_PURGE' }).catch(() => {});
+      }
+    });
+    sendResponse({ received: true });
+    return true;
+  }
+
+  // 5. Resume Purge Task
+  if (message.type === 'RESUME_CLIENT_PURGE') {
+    chrome.tabs.query({ url: ['*://*.x.com/*', '*://*.twitter.com/*'] }, (tabs) => {
+      for (const t of tabs) {
+        chrome.tabs.sendMessage(t.id, { type: 'RESUME_CLIENT_PURGE' }).catch(() => {});
+      }
+    });
+    sendResponse({ received: true });
+    return true;
+  }
+
+  // 6. Stop / Abort Purge Task
+  if (message.type === 'STOP_CLIENT_PURGE') {
+    chrome.tabs.query({ url: ['*://*.x.com/*', '*://*.twitter.com/*'] }, (tabs) => {
+      for (const t of tabs) {
+        chrome.tabs.sendMessage(t.id, { type: 'STOP_CLIENT_PURGE' }).catch(() => {});
+      }
+    });
+    sendResponse({ received: true });
+    return true;
+  }
+
+  // 7. Telemetry Log Event — broadcast from content.js to all web dashboard tabs
   if (message.type === 'TELEMETRY_LOG_EVENT') {
     chrome.tabs.query({}, (allTabs) => {
       for (const tab of allTabs) {
