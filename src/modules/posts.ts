@@ -46,6 +46,12 @@ export class PostPurgeEngine {
 
   private async purgeTweetElement(article: Locator, mode: 'posts' | 'replies' | 'reposts'): Promise<boolean> {
     try {
+      // 0. Pinned Post Safeguard
+      const isPinned = await article.locator('[data-testid="socialContext"]').filter({ hasText: /Pinned|pinned/i }).first().isVisible({ timeout: 200 }).catch(() => false);
+      if (isPinned) {
+        return false;
+      }
+
       // 1. Check if Retweet / Repost
       const unretweetButton = article.locator('[data-testid="unretweet"]').first();
       if (await unretweetButton.isVisible({ timeout: 300 }).catch(() => false)) {

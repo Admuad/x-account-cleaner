@@ -781,6 +781,9 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
       return;
     }
 
+    const whitelistedTweetIds = (config.whitelist?.tweets || []).map(id => id.trim()).filter(Boolean);
+    const targetUserHandle = (config.handle || '').toLowerCase().replace('@', '').trim();
+
     // 1. Check for Un-Retweet buttons
     if (config.modules?.reposts || options.onlyReposts) {
       const unretweetBtns = Array.from(document.querySelectorAll('[data-testid="unretweet"]'));
@@ -797,13 +800,18 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
             confirmUnretweet.click();
             purgedCount++;
             emptyScrolls = 0;
-            sendLog('repost', `Undo Repost / Retweet (#${purgedCount})`);
+            sendLog('repost', `🔄 Undid Repost / Retweet (#${purgedCount})`);
             
             const jitterDelay = calculateJitter(config.pacing || 'balanced');
             await delay(jitterDelay);
+          } else {
+            document.body.click();
+            await delay(200);
           }
         } catch (e) {
           console.error(e);
+          document.body.click();
+          await delay(200);
         }
       }
     }
@@ -814,7 +822,7 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
     }
 
     // 2. Check for Caret dropdowns to delete tweets & replies
-    const carets = Array.from(document.querySelectorAll('[data-testid="caret"]'));
+    const carets = Array.from(document.querySelectorAll('[data-testid="caret"], button[aria-label="More"]'));
 
     if (carets.length === 0) {
       emptyScrolls++;
@@ -833,11 +841,43 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
 
       const tweetArticle = caret.closest('article[data-testid="tweet"]');
       if (tweetArticle) {
+        // Pinned Post Protection
+        const socialContext = tweetArticle.querySelector('[data-testid="socialContext"]');
+        if (socialContext && (socialContext.textContent || '').toLowerCase().includes('pinned')) {
+          sendLog('info', '📌 Preserved Pinned Post');
+          continue;
+        }
+
+        // Whitelisted Tweet ID Protection
+        const statusLink = tweetArticle.querySelector('a[href*="/status/"]');
+        if (statusLink && whitelistedTweetIds.length > 0) {
+          const href = statusLink.getAttribute('href') || '';
+          if (whitelistedTweetIds.some(id => href.includes(id))) {
+            sendLog('info', '🛡️ Preserved Tweet ID (Whitelisted in Vault)');
+            continue;
+          }
+        }
+
+        // Whitelisted Keyword Protection
         const text = tweetArticle.textContent?.toLowerCase() || '';
         const hasKeyword = keywords.some(k => k && text.includes(k));
         if (hasKeyword) {
-          sendLog('info', '🛡️ Preserved tweet containing whitelisted keyword.');
+          sendLog('info', '🛡️ Preserved tweet containing whitelisted keyword');
           continue;
+        }
+
+        // Author Ownership Verification on /with_replies or multi-author feeds
+        if (targetUserHandle) {
+          const authorLinks = Array.from(tweetArticle.querySelectorAll('a[role="link"][href^="/"]'));
+          const isAuthoredByUser = authorLinks.some(l => {
+            const h = (l.getAttribute('href') || '').replace('/', '').split('/')[0].split('?')[0].toLowerCase();
+            return h === targetUserHandle;
+          });
+          // If in /with_replies and tweet belongs to a foreign conversation starter, skip clicking foreign caret
+          const isRepliesRoute = window.location.pathname.toLowerCase().includes('/with_replies');
+          if (isRepliesRoute && !isAuthoredByUser) {
+            continue;
+          }
         }
       }
 
@@ -845,8 +885,14 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
         caret.click();
         await delay(350);
 
-        const deleteOption = document.querySelector('[data-testid="Dropdown"] [role="menuitem"]');
-        if (deleteOption && deleteOption.textContent && deleteOption.textContent.toLowerCase().includes('delete')) {
+        // Find delete menuitem across all menu items
+        const menuItems = Array.from(document.querySelectorAll('[role="menuitem"]'));
+        const deleteOption = menuItems.find(item => {
+          const txt = (item.textContent || '').toLowerCase();
+          return txt.includes('delete') || txt.includes('delete post') || txt.includes('delete reply');
+        });
+
+        if (deleteOption) {
           deleteOption.click();
           await delay(350);
 
@@ -856,10 +902,13 @@ async function runTimelinePurge(config, whitelistUsers, options = { onlyReposts:
             purgedCount++;
             deletedInPass++;
             emptyScrolls = 0;
-            sendLog('delete', `Purged timeline post/reply (#${purgedCount})`);
+            sendLog('delete', `🗑️ Purged timeline post/reply (#${purgedCount})`);
             
             const jitterDelay = calculateJitter(config.pacing || 'balanced');
             await delay(jitterDelay);
+          } else {
+            document.body.click();
+            await delay(200);
           }
         } else {
           document.body.click();
