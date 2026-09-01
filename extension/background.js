@@ -112,7 +112,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // 7. Telemetry Log Event — broadcast from content.js directly to web dashboard tabs
   if (message.type === 'TELEMETRY_LOG_EVENT') {
-    chrome.tabs.query({ url: ['http://localhost:*/*', 'http://127.0.0.1:*/*'] }, (dashboardTabs) => {
+    chrome.tabs.query({
+      url: [
+        'https://vanishx.vercel.app/*',
+        'https://*.vercel.app/*',
+        'https://x-account-cleaner.vercel.app/*',
+        'http://localhost:*/*',
+        'http://127.0.0.1:*/*'
+      ]
+    }, (dashboardTabs) => {
       if (dashboardTabs && dashboardTabs.length > 0) {
         for (const tab of dashboardTabs) {
           chrome.tabs.sendMessage(tab.id, message).catch(() => {});

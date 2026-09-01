@@ -206,7 +206,7 @@ export default function AppPage() {
         const newTarget = event.data.totalTargeted;
         const newStatus = event.data.status;
         const totalPurgedOverride = event.data.totalPurged;
-        const isAction = log.type === 'unfollow' || log.type === 'delete' || log.type === 'repost';
+        const isAction = log.type === 'unfollow' || log.type === 'delete' || log.type === 'repost' || log.type === 'reply';
 
         let newVelocity = 0;
         if (isAction) {
@@ -221,7 +221,7 @@ export default function AppPage() {
           const isDelete = log.type === 'delete';
           const isRepost = log.type === 'repost' || log.message?.toLowerCase().includes('repost');
           const isReply = log.type === 'reply' || log.message?.toLowerCase().includes('reply');
-          const isWhitelisted = log.type === 'whitelist' || log.message?.toLowerCase().includes('whitelisted') || log.message?.toLowerCase().includes('skipped');
+          const isWhitelisted = log.type === 'whitelist' || log.message?.toLowerCase().includes('whitelisted') || log.message?.toLowerCase().includes('skipped') || log.message?.toLowerCase().includes('preserved');
 
           const isComplete = newStatus === 'completed' || log.type === 'success';
 
