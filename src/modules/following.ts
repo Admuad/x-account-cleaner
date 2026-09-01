@@ -162,6 +162,39 @@ export class FollowingPurgeEngine {
             continue;
           }
 
+          // Check Mutual Relationship & Bot Flags (if configured)
+          if (this.options.nonMutualsOnly || this.options.botsOnly) {
+            const isMutual = await cell
+              .locator('[data-testid="userFollowIndicator"], text="Follows you"')
+              .first()
+              .isVisible({ timeout: 300 })
+              .catch(() => false);
+
+            if (isMutual) {
+              spinner.text = `[Worker: Following] [Mutual Friend] Preserved @${handle || 'user'}`;
+              continue;
+            }
+
+            if (this.options.botsOnly) {
+              const isDefaultAvatar = await cell
+                .locator('img[src*="default_profile_images"], img[src*="sticky/default_profile"]')
+                .first()
+                .isVisible({ timeout: 250 })
+                .catch(() => false);
+
+              const isNumericHandle = handle ? /\d{4,}$/.test(handle) : false;
+
+              const textDivs = await cell.locator('div[dir="auto"]').allInnerTexts().catch(() => []);
+              const hasBio = textDivs.some(t => t.trim().length > 0 && !t.startsWith('@') && t !== handle);
+
+              const isFlaggedBot = isDefaultAvatar || isNumericHandle || !hasBio;
+              if (!isFlaggedBot) {
+                spinner.text = `[Worker: Following] [Active User] Preserved @${handle || 'user'}`;
+                continue;
+              }
+            }
+          }
+
           // Strict Guard: Never touch buttons in Follow state
           const followOnlyBtn = cell.locator('button:text-is("Follow"), button[data-testid$="-follow"]').first();
           if (await followOnlyBtn.isVisible({ timeout: 200 }).catch(() => false)) {

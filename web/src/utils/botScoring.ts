@@ -44,20 +44,38 @@ export function calculateBotScore(account: AuditAccount, config: BotFilterConfig
     shouldUnfollow = false;
   } else if (!config.enabled) {
     shouldUnfollow = false;
-  } else if (config.preset === 'non_mutuals_only') {
-    shouldUnfollow = !account.isFollowingBack;
   } else if (config.preset === 'aggressive') {
     // Aggressive: Unfollow 100% of accounts (except Whitelisted)
     shouldUnfollow = true;
+  } else if (config.preset === 'non_mutuals_only') {
+    // Strictly unfollow non-mutuals
+    shouldUnfollow = !account.isFollowingBack;
   } else if (config.preset === 'moderate') {
-    // Moderate: score >= 70 OR (non-mutual AND (default avatar OR empty bio))
-    shouldUnfollow = normalizedScore >= 70 || (!account.isFollowingBack && (account.isDefaultAvatar || !account.bio));
+    // Moderate: Non-mutual AND (Default Avatar OR Empty Bio OR Numeric Handle OR High Risk Score)
+    const hasBotIndicators = account.isDefaultAvatar || !account.avatarUrl || !account.bio || /\d{4,}$/.test(account.handle) || normalizedScore >= 60;
+    shouldUnfollow = !account.isFollowingBack && hasBotIndicators;
   } else if (config.preset === 'custom') {
-    if (config.unfollowNonMutuals && !account.isFollowingBack) shouldUnfollow = true;
-    if (config.unfollowDefaultAvatar && (account.isDefaultAvatar || !account.avatarUrl)) shouldUnfollow = true;
-    if (config.unfollowNumericHandle && /\d{4,}$/.test(account.handle)) shouldUnfollow = true;
-    if (config.unfollowEmptyBio && (!account.bio || account.bio.trim().length === 0)) shouldUnfollow = true;
-    if (config.unfollowExtremeRatio && ratio > 50) shouldUnfollow = true;
+    // Granular Custom Multi-Factor Rules
+    const hasAttributeFilter = config.unfollowDefaultAvatar || config.unfollowNumericHandle || config.unfollowEmptyBio || config.unfollowExtremeRatio;
+
+    if (config.unfollowNonMutuals && !hasAttributeFilter) {
+      // Only non-mutuals filter active
+      shouldUnfollow = !account.isFollowingBack;
+    } else if (hasAttributeFilter) {
+      let matchesAttribute = false;
+      if (config.unfollowDefaultAvatar && (account.isDefaultAvatar || !account.avatarUrl)) matchesAttribute = true;
+      if (config.unfollowNumericHandle && /\d{4,}$/.test(account.handle)) matchesAttribute = true;
+      if (config.unfollowEmptyBio && (!account.bio || account.bio.trim().length === 0)) matchesAttribute = true;
+      if (config.unfollowExtremeRatio && ratio > 50) matchesAttribute = true;
+
+      if (config.unfollowNonMutuals) {
+        // Must be Non-Mutual AND match at least one selected attribute
+        shouldUnfollow = !account.isFollowingBack && matchesAttribute;
+      } else {
+        // Matches attribute regardless of mutual status
+        shouldUnfollow = matchesAttribute;
+      }
+    }
   }
 
   return {

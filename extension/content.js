@@ -594,6 +594,89 @@ async function runFollowersPurge(config, whitelistUsers, initialTargetCount = 0)
   }
 }
 
+// Evaluate UserCell against Multi-Factor Bot and Relationship rules
+function shouldUnfollowUserCell(cell, targetHandle, botFilter) {
+  if (!botFilter || !botFilter.enabled) {
+    return { shouldUnfollow: true, reason: 'Following Purge' };
+  }
+
+  const preset = botFilter.preset || 'aggressive';
+
+  // 1. Aggressive = Unfollow 100% of accounts
+  if (preset === 'aggressive') {
+    return { shouldUnfollow: true, reason: 'Aggressive Sweep' };
+  }
+
+  // 2. Check Mutual Status (from "Follows you" badge / DOM indicators)
+  const followsYouBadge = cell.querySelector('[data-testid="userFollowIndicator"]');
+  const cellText = (cell.textContent || '').toLowerCase();
+  const isMutual = Boolean(followsYouBadge || cellText.includes('follows you'));
+
+  if (preset === 'non_mutuals_only') {
+    if (isMutual) {
+      return { shouldUnfollow: false, reason: 'Mutual Friend (Follows you)' };
+    }
+    return { shouldUnfollow: true, reason: 'Non-Mutual' };
+  }
+
+  // 3. Extract Cell Attributes for Moderate & Custom Presets
+  const imgEl = cell.querySelector('img[src*="default_profile_images"], img[src*="sticky/default_profile"], img[src*="default_profile"]');
+  const isDefaultAvatar = Boolean(imgEl);
+  const isNumericHandle = /\d{4,}$/.test(targetHandle);
+
+  // Extract bio text from user cell (excluding handle & display name lines)
+  const textDivs = Array.from(cell.querySelectorAll('div[dir="auto"]'));
+  const bio = textDivs.map(d => d.textContent?.trim() || '').filter(t => t && !t.startsWith('@') && t !== targetHandle).pop() || '';
+  const isEmptyBio = bio.length === 0;
+
+  // 4. Moderate Preset (Balanced Bot & Ghost Sweeper)
+  if (preset === 'moderate') {
+    if (isMutual) {
+      return { shouldUnfollow: false, reason: 'Mutual Friend' };
+    }
+    const isBot = isDefaultAvatar || isEmptyBio || isNumericHandle;
+    if (isBot) {
+      const flags = [];
+      if (isDefaultAvatar) flags.push('Default Avatar');
+      if (isEmptyBio) flags.push('Empty Bio');
+      if (isNumericHandle) flags.push('Numeric Handle');
+      return { shouldUnfollow: true, reason: `Bot / Ghost (${flags.join(' + ')})` };
+    }
+    return { shouldUnfollow: false, reason: 'Active Non-Mutual (Passed Heuristics)' };
+  }
+
+  // 5. Custom Multi-Factor Rules
+  if (preset === 'custom') {
+    const hasAttrFilter = botFilter.unfollowDefaultAvatar || botFilter.unfollowNumericHandle || botFilter.unfollowEmptyBio || botFilter.unfollowExtremeRatio;
+    
+    if (botFilter.unfollowNonMutuals && !hasAttrFilter) {
+      return { shouldUnfollow: !isMutual, reason: !isMutual ? 'Non-Mutual' : 'Mutual Friend' };
+    }
+
+    let matchFlags = [];
+    if (botFilter.unfollowDefaultAvatar && isDefaultAvatar) matchFlags.push('Default Avatar');
+    if (botFilter.unfollowNumericHandle && isNumericHandle) matchFlags.push('Numeric Handle');
+    if (botFilter.unfollowEmptyBio && isEmptyBio) matchFlags.push('Empty Bio');
+
+    const matchesAttributes = matchFlags.length > 0;
+
+    if (botFilter.unfollowNonMutuals) {
+      // Must be Non-Mutual AND match at least one selected attribute
+      if (!isMutual && matchesAttributes) {
+        return { shouldUnfollow: true, reason: `Non-Mutual + ${matchFlags.join(' + ')}` };
+      }
+      return { shouldUnfollow: false, reason: isMutual ? 'Mutual Preserved' : 'Attributes Preserved' };
+    } else {
+      if (matchesAttributes) {
+        return { shouldUnfollow: true, reason: `Matched ${matchFlags.join(' + ')}` };
+      }
+      return { shouldUnfollow: false, reason: 'Attributes Preserved' };
+    }
+  }
+
+  return { shouldUnfollow: true, reason: 'Target Selected' };
+}
+
 // ==========================================
 // 3. FOLLOWING PURGE ENGINE
 // ==========================================
@@ -609,7 +692,6 @@ async function runFollowingPurge(config, whitelistUsers, initialTargetCount = 0)
     sendTelemetryWithTarget('info', `Target sync: ${groundTruthCount} accounts`, groundTruthCount);
   }
 
-  const botPreset = config.botFilter?.preset || 'aggressive'; // 'aggressive' = Unfollow All
   let unfollowedCount = 0;
   let consecutiveEmptyPasses = 0;
   const processedHandles = new Set();
@@ -665,15 +747,11 @@ async function runFollowingPurge(config, whitelistUsers, initialTargetCount = 0)
         continue;
       }
 
-      // Check relationship rule
-      if (botPreset === 'non_mutuals_only') {
-        const followsYouBadge = cell.querySelector('[data-testid="userFollowIndicator"]');
-        const textContent = cell.textContent || '';
-        const isMutual = !!followsYouBadge || textContent.toLowerCase().includes('follows you');
-        if (isMutual) {
-          sendLog('info', `🤝 Preserved mutual @${targetHandle} (Follows you)`);
-          continue;
-        }
+      // Check Multi-Factor Bot / Relationship Rules
+      const decision = shouldUnfollowUserCell(cell, targetHandle, config.botFilter);
+      if (!decision.shouldUnfollow) {
+        sendLog('info', `🛡️ Preserved @${targetHandle} (${decision.reason})`);
+        continue;
       }
 
       // STRICT SAFEGUARD: Reject "Follow" buttons, accept only active relationships

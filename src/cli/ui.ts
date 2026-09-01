@@ -25,6 +25,8 @@ export class CLIUI {
       followers?: boolean;
       all?: boolean;
       archivePath?: string;
+      nonMutualsOnly?: boolean;
+      botsOnly?: boolean;
     },
     whitelistStats: { usernamesCount: number; tweetIdsCount: number; keywordsCount: number }
   ): void {
@@ -35,7 +37,18 @@ export class CLIUI {
     console.log(`  Target Posts  : ${options.posts || options.all ? chalk.green('ENABLED') : chalk.gray('Disabled')}`);
     console.log(`  Target Replies: ${options.replies || options.all ? chalk.green('ENABLED') : chalk.gray('Disabled')}`);
     console.log(`  Target Reposts: ${options.reposts || options.all ? chalk.green('ENABLED') : chalk.gray('Disabled')}`);
-    console.log(`  Unfollow All  : ${options.unfollow || options.all ? chalk.green('ENABLED') : chalk.gray('Disabled')}`);
+    
+    let unfollowStatus = chalk.gray('Disabled');
+    if (options.unfollow || options.all) {
+      if (options.botsOnly) {
+        unfollowStatus = chalk.yellow.bold('FLAGGED BOTS ONLY (Heuristic)');
+      } else if (options.nonMutualsOnly) {
+        unfollowStatus = chalk.cyan.bold('NON-MUTUALS ONLY (Preserve Mutuals)');
+      } else {
+        unfollowStatus = chalk.red.bold('MASS UNFOLLOW ALL');
+      }
+    }
+    console.log(`  Unfollow      : ${unfollowStatus}`);
     console.log(`  Remove Follow : ${options.followers || options.all ? chalk.green('ENABLED') : chalk.gray('Disabled')}`);
     if (options.archivePath) {
       console.log(`  Archive Data  : ${chalk.yellow(options.archivePath)}`);

@@ -30,7 +30,9 @@ program
   .option('--max-delay <ms>', 'Maximum randomized delay per action in ms', '1200')
   .option('--whitelist <path>', 'Custom path to whitelist JSON file', 'whitelist.json')
   .option('--headless', 'Run browser in headless mode', false)
-  .option('--max-count <number>', 'Maximum items to process per operation');
+  .option('--max-count <number>', 'Maximum items to process per operation')
+  .option('--non-mutuals-only', 'Only unfollow accounts that do not follow you back (preserves mutuals)', false)
+  .option('--bots-only', 'Only unfollow flagged bots (default avatar, numeric handles, empty bios)', false);
 
 async function main() {
   CLIUI.printBanner();
@@ -46,7 +48,9 @@ async function main() {
     rawOpts.unfollow ||
     rawOpts.followers ||
     rawOpts.all ||
-    rawOpts.archive;
+    rawOpts.archive ||
+    rawOpts.nonMutualsOnly ||
+    rawOpts.botsOnly;
 
   if (!hasDirectFlags) {
     options = await CLIWizard.promptOptions();
@@ -55,7 +59,7 @@ async function main() {
       posts: rawOpts.all || Boolean(rawOpts.posts),
       replies: rawOpts.all || Boolean(rawOpts.replies),
       reposts: rawOpts.all || Boolean(rawOpts.reposts),
-      unfollow: rawOpts.all || Boolean(rawOpts.unfollow),
+      unfollow: rawOpts.all || Boolean(rawOpts.unfollow) || Boolean(rawOpts.nonMutualsOnly) || Boolean(rawOpts.botsOnly),
       followers: rawOpts.all || Boolean(rawOpts.followers),
       all: Boolean(rawOpts.all),
       parallel: Boolean(rawOpts.parallel),
@@ -66,6 +70,8 @@ async function main() {
       whitelistPath: rawOpts.whitelist,
       headless: Boolean(rawOpts.headless),
       maxCount: rawOpts.maxCount ? parseInt(rawOpts.maxCount, 10) : undefined,
+      nonMutualsOnly: Boolean(rawOpts.nonMutualsOnly),
+      botsOnly: Boolean(rawOpts.botsOnly),
     };
   }
 

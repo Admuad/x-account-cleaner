@@ -13,6 +13,8 @@ export interface CleanerOptions {
   headless?: boolean;
   whitelistPath?: string;
   maxCount?: number;
+  nonMutualsOnly?: boolean;
+  botsOnly?: boolean;
 }
 
 export interface WhitelistConfig {

@@ -14,7 +14,9 @@ export class CLIWizard {
           { name: '💬 Delete Replies only', value: 'replies' },
           { name: '🗑️  Delete Posts only (original tweets)', value: 'posts' },
           { name: '🔥 Delete Posts, Replies & Reposts', value: 'posts_replies_reposts' },
-          { name: '👋 Unfollow Accounts only', value: 'unfollow' },
+          { name: '👋 Unfollow Non-Mutuals only (preserve mutual friends)', value: 'non_mutuals' },
+          { name: '🤖 Unfollow Flagged Bots & Inactive only (default avatar/no bio/numeric handle)', value: 'bots' },
+          { name: '🧹 Mass Unfollow All accounts', value: 'unfollow_all' },
           { name: '🚫 Remove Followers only', value: 'followers' },
           { name: '⚡ Full Account Wipe (Posts + Replies + Reposts + Unfollow + Followers)', value: 'all' },
           { name: '🛠️  Custom Multi-Select...', value: 'custom' },
@@ -27,6 +29,8 @@ export class CLIWizard {
     let selectedReposts = false;
     let selectedUnfollow = false;
     let selectedFollowers = false;
+    let nonMutualsOnly = false;
+    let botsOnly = false;
 
     if (modeAnswer.preset === 'posts') {
       selectedPosts = true;
@@ -38,7 +42,13 @@ export class CLIWizard {
       selectedPosts = true;
       selectedReplies = true;
       selectedReposts = true;
-    } else if (modeAnswer.preset === 'unfollow') {
+    } else if (modeAnswer.preset === 'non_mutuals') {
+      selectedUnfollow = true;
+      nonMutualsOnly = true;
+    } else if (modeAnswer.preset === 'bots') {
+      selectedUnfollow = true;
+      botsOnly = true;
+    } else if (modeAnswer.preset === 'unfollow_all') {
       selectedUnfollow = true;
     } else if (modeAnswer.preset === 'followers') {
       selectedFollowers = true;
@@ -162,6 +172,8 @@ export class CLIWizard {
       headless: detailAnswers.headless,
       minDelay,
       maxDelay,
+      nonMutualsOnly,
+      botsOnly,
     };
   }
 }
