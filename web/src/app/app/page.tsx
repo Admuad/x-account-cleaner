@@ -398,6 +398,7 @@ export default function AppPage() {
       return;
     }
     setActiveHandle(clean);
+    setHandleInput(clean);
     setProfile((prev) => ({
       ...prev,
       handle: clean,
@@ -405,7 +406,7 @@ export default function AppPage() {
     }));
     try {
       localStorage.setItem('vanishx_active_handle', clean);
-      showToast('success', `Target set to @${clean}`, 'Handle Connected');
+      showToast('success', `Connected to @${clean}`, 'Account Connected');
     } catch (e) {}
   };
 
@@ -776,13 +777,13 @@ export default function AppPage() {
                     className="bg-space-darkest border border-space-border rounded-md pl-7 pr-3 py-1.5 text-xs text-space-text focus:outline-none focus:border-coral font-mono w-36 sm:w-44"
                   />
                 </div>
-                {activeHandle && handleInput.trim().replace(/^@/, '').toLowerCase() === activeHandle.toLowerCase() ? (
+                {activeHandle && (handleInput.trim() === '' || handleInput.trim().replace(/^@/, '').toLowerCase() === activeHandle.toLowerCase()) ? (
                   <button
-                    type="submit"
-                    className="px-3 py-1.5 rounded-md bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-xs font-semibold flex items-center space-x-1 hover:bg-emerald-500/25 transition-all shadow-[0_0_12px_rgba(16,185,129,0.15)]"
-                    title="Account is currently connected"
+                    type="button"
+                    className="px-3 py-1.5 rounded-md bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 text-xs font-bold flex items-center space-x-1.5 transition-all shadow-[0_0_12px_rgba(16,185,129,0.2)] cursor-default"
+                    title="Account is actively connected"
                   >
-                    <Check className="w-3.5 h-3.5" />
+                    <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" />
                     <span>Connected</span>
                   </button>
                 ) : (
@@ -790,7 +791,7 @@ export default function AppPage() {
                     type="submit"
                     className="coral-button px-3 py-1.5 text-xs font-semibold"
                   >
-                    Connect
+                    {activeHandle ? 'Switch' : 'Connect'}
                   </button>
                 )}
                 <button
