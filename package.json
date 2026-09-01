@@ -1,6 +1,6 @@
 {
   "name": "x-account-cleaner",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Autonomous browser automation CLI tool to delete X (Twitter) posts, replies, reposts, unfollow accounts, and remove followers safely.",
   "main": "dist/index.js",
   "bin": {

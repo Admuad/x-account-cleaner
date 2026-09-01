@@ -14,9 +14,9 @@ import { FollowerPurgeEngine } from './modules/followers';
 const program = new Command();
 
 program
-  .name('x-cleaner')
-  .description('Autonomous tool to wipe X posts, replies, reposts, unfollow accounts, and remove followers')
-  .version('1.2.0')
+  .name('vanishx')
+  .description('VanishX — Autonomous tool to wipe X posts, replies, reposts, unfollow accounts, and remove followers')
+  .version('2.0.0')
   .option('-p, --posts', 'Delete original posts')
   .option('-r, --replies', 'Delete replies')
   .option('-k, --reposts', 'Undo reposts and retweets')
