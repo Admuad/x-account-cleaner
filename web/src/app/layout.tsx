@@ -31,9 +31,19 @@ export const metadata: Metadata = {
     images: [
       {
         url: 'https://vanishx.vercel.app/og-image.jpg',
+        secureUrl: 'https://vanishx.vercel.app/og-image.jpg',
         width: 1200,
         height: 630,
+        type: 'image/jpeg',
         alt: 'VanishX — Autonomous 𝕏 Timeline Purge & Clean Slate Engine',
+      },
+      {
+        url: 'https://vanishx.vercel.app/og-square.jpg',
+        secureUrl: 'https://vanishx.vercel.app/og-square.jpg',
+        width: 600,
+        height: 600,
+        type: 'image/jpeg',
+        alt: 'VanishX App Icon',
       },
     ],
     locale: 'en_US',
