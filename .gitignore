@@ -1,16 +1,31 @@
+# Dependencies
 node_modules/
+web/node_modules/
+
+# Build artifacts
 dist/
+web/.next/
+web/out/
+*.tsbuildinfo
+
+# AI & IDE Metadata
+.gemini/
+.agents/
+.system_generated/
+.tempmediaStorage/
+.user_uploaded/
+.idea/
+.vscode/
+
+# Secrets & Session Data
 .session.json
-*.log
+*.session.json
 .env
 .env*.local
+.env.*
+*.log
+.npmrc
 
-# Next.js
-web/.next/
-web/node_modules/
-web/out/
-
-# OS / IDE
+# OS metadata
 .DS_Store
 Thumbs.db
-*.tsbuildinfo
