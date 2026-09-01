@@ -1,14 +1,31 @@
 {
   "name": "x-account-cleaner",
   "version": "1.0.0",
-  "description": "Autonomous browser automation CLI tool to delete X (Twitter) posts, replies, unfollow accounts, and remove followers safely.",
+  "description": "Autonomous browser automation CLI tool to delete X (Twitter) posts, replies, reposts, unfollow accounts, and remove followers safely.",
   "main": "dist/index.js",
   "bin": {
     "x-account-cleaner": "./dist/index.js",
-    "vanishx": "./dist/index.js"
+    "vanishx": "./dist/index.js",
+    "x-cleaner": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "whitelist.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Admuad/x-account-cleaner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Admuad/x-account-cleaner/issues"
+  },
+  "homepage": "https://github.com/Admuad/x-account-cleaner#readme",
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "pack:test": "npm pack --dry-run",
     "start": "ts-node src/index.ts",
     "clean": "ts-node src/index.ts",
     "set-cookies": "ts-node src/set-cookies.ts",
@@ -23,11 +40,14 @@
     "cleaner",
     "purge",
     "delete-tweets",
+    "delete-posts",
     "unfollow",
     "remove-followers",
+    "unretweet",
+    "vanishx",
     "playwright"
   ],
-  "author": "",
+  "author": "Admuad (https://github.com/Admuad)",
   "license": "MIT",
   "dependencies": {
     "adm-zip": "^0.5.16",

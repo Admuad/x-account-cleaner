@@ -1,0 +1,22 @@
+# Source & Development
+src/
+web/
+extension/
+tests/
+.gemini/
+.system_generated/
+.tempmediaStorage/
+.user_uploaded/
+
+# Configuration & Secrets
+.session.json
+.env
+.env.*
+*.log
+*.tsbuildinfo
+tsconfig.json
+
+# Dependencies & OS
+node_modules/
+.DS_Store
+Thumbs.db

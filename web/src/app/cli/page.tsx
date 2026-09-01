@@ -40,28 +40,29 @@ export default function CliPage() {
   const steps = [
     {
       id: 'step1',
-      title: 'Step 1: Clone Repository & Install Dependencies',
-      desc: 'Clone the lightweight open-source repository and install dependencies',
+      title: 'Step 1: 1-Command Instant Run (Zero Install)',
+      desc: 'Run the CLI directly in any terminal without cloning the repository or downloading source code',
       commands: [
-        { label: 'Recommended: Git Clone & Setup', cmd: 'git clone https://github.com/Admuad/x-account-cleaner.git\ncd x-account-cleaner\nnpm install' },
-        { label: 'Alternative: Direct GitHub npx Run', cmd: 'npx github:Admuad/x-account-cleaner' },
+        { label: 'Instant Execution via npx (Recommended)', cmd: 'npx x-account-cleaner' },
+        { label: 'Global CLI Installation', cmd: 'npm install -g x-account-cleaner\nx-account-cleaner' },
       ],
     },
     {
       id: 'step2',
-      title: 'Step 2: Authenticate 𝕏 Session',
-      desc: 'Inject your active session cookies once. Never stores your password.',
+      title: 'Step 2: Developer Mode (Git Clone)',
+      desc: 'For developers who want to run from source and modify options locally',
       commands: [
-        { label: 'Interactive Session Cookie Injector', cmd: 'npm run set-cookies' },
+        { label: 'Git Clone & Run', cmd: 'git clone https://github.com/Admuad/x-account-cleaner.git\ncd x-account-cleaner\nnpm install\nnpm start' },
       ],
-      note: 'Enter your auth_token and ct0 from Chrome DevTools (Application > Cookies > x.com).',
+      note: 'You can also inject cookies once with npm run set-cookies for automated background runs.',
     },
     {
       id: 'step3',
-      title: 'Step 3: Launch Interactive Wizard',
-      desc: 'Starts the guided terminal wizard with preset options and safe pacing',
+      title: 'Step 3: Direct Flag Automation',
+      desc: 'Run unattended headless sweeps with specific CLI arguments',
       commands: [
-        { label: 'Launch Interactive CLI', cmd: 'npm start' },
+        { label: 'Headless Full Clean Slate', cmd: 'npx x-account-cleaner --all --headless' },
+        { label: 'Unfollow Only with Safe Pacing', cmd: 'npx x-account-cleaner --unfollow --min-delay 2500 --max-delay 4500' },
       ],
     },
   ];
