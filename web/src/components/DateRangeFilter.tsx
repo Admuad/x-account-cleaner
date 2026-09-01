@@ -1,7 +1,5 @@
-'use client';
-
-import React from 'react';
-import { Calendar, Clock, Filter, Search } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { Calendar, Clock, Filter, Search, Lock } from 'lucide-react';
 import { DateFilterConfig, DatePreset } from '@/types';
 import { getPresetDateBoundaries, generateXSearchQuery } from '@/utils/dateHelper';
 
@@ -9,13 +7,22 @@ interface DateRangeFilterProps {
   config: DateFilterConfig;
   onChange: (config: DateFilterConfig) => void;
   userHandle: string;
+  disabled?: boolean;
 }
 
 export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
   config,
   onChange,
   userHandle,
+  disabled = false,
 }) => {
+  // Auto-disable if timeline modules are unselected
+  useEffect(() => {
+    if (disabled && config.enabled) {
+      onChange({ ...config, enabled: false });
+    }
+  }, [disabled, config.enabled, onChange, config]);
+
   const presets: { id: DatePreset; title: string; subtitle: string }[] = [
     {
       id: 'before_2026',
@@ -45,6 +52,7 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
   ];
 
   const handlePresetSelect = (preset: DatePreset) => {
+    if (disabled) return;
     const boundaries = getPresetDateBoundaries(preset);
     onChange({
       ...config,
@@ -57,7 +65,7 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
   const searchQuery = generateXSearchQuery(userHandle, config);
 
   return (
-    <div id="date-filter" className="clean-card p-5 border-space-border">
+    <div id="date-filter" className={`clean-card p-5 border-space-border transition-opacity ${disabled ? 'opacity-70' : 'opacity-100'}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-3">
@@ -67,8 +75,8 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
           <div>
             <h2 className="text-sm font-bold text-space-text flex items-center space-x-2">
               <span>Date-Range Filtering Engine</span>
-              <span className="coral-badge text-[10px] font-mono px-2 py-0.5 rounded font-bold">
-                PRECISION JUMP
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${disabled ? 'bg-space-card text-space-muted border border-space-border' : 'coral-badge'}`}>
+                {disabled ? 'TIMELINE ONLY' : 'PRECISION JUMP'}
               </span>
             </h2>
             <p className="text-xs text-space-muted">
@@ -78,18 +86,29 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
         </div>
 
         {/* Enable / Disable Toggle */}
-        <label className="relative inline-flex items-center cursor-pointer">
+        <label className={`relative inline-flex items-center ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
           <input
             type="checkbox"
-            checked={config.enabled}
-            onChange={(e) => onChange({ ...config, enabled: e.target.checked })}
+            disabled={disabled}
+            checked={!disabled && config.enabled}
+            onChange={(e) => !disabled && onChange({ ...config, enabled: e.target.checked })}
             className="sr-only peer"
           />
           <div className="w-9 h-5 bg-space-border-light peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-coral"></div>
         </label>
       </div>
 
-      {config.enabled ? (
+      {disabled ? (
+        <div className="p-3.5 rounded-md bg-space-darkest border border-amber-900/40 flex items-start space-x-2.5 text-xs text-amber-200/90">
+          <Lock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold text-amber-300">Date Window Inactive (Timeline Only)</div>
+            <div className="text-[11px] text-space-muted mt-0.5">
+              Date filtering applies exclusively to <strong>Posts, Replies & Reposts</strong>. Following and follower lists do not have date timestamps on 𝕏 — configure account criteria using <strong>Step 2 (Bot & Non-Mutuals)</strong>.
+            </div>
+          </div>
+        </div>
+      ) : config.enabled ? (
         <div className="space-y-3.5 pt-1">
           {/* Preset Buttons Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">

@@ -2,24 +2,29 @@
 
 import React, { useRef, useEffect } from 'react';
 import { Terminal, Play, Pause, Square, Activity, Download, CheckCircle, Shield, Zap } from 'lucide-react';
-import { TelemetryState } from '@/types';
+import { TelemetryState, PurgeConfig } from '@/types';
+import { Sliders } from 'lucide-react';
 
 interface TerminalConsoleProps {
   telemetry: TelemetryState;
+  config: PurgeConfig;
   onStart: () => void;
   onPause: () => void;
   onResume: () => void;
   onAbort: () => void;
   onExportReport: () => void;
+  onEditModules?: () => void;
 }
 
 export const TerminalConsole: React.FC<TerminalConsoleProps> = ({
   telemetry,
+  config,
   onStart,
   onPause,
   onResume,
   onAbort,
   onExportReport,
+  onEditModules,
 }) => {
   const terminalViewportRef = useRef<HTMLDivElement>(null);
 
@@ -33,10 +38,17 @@ export const TerminalConsole: React.FC<TerminalConsoleProps> = ({
     ? Math.min(100, Math.round((telemetry.totalPurged / telemetry.totalTargeted) * 100))
     : 0;
 
+  const activeModulesList = [];
+  if (config.modules.following) activeModulesList.push('👋 Unfollow Bots & Non-Mutuals');
+  if (config.modules.followers) activeModulesList.push('🚫 Remove Followers');
+  if (config.modules.posts) activeModulesList.push('🗑️ Delete Posts');
+  if (config.modules.replies) activeModulesList.push('💬 Delete Replies');
+  if (config.modules.reposts) activeModulesList.push('🔄 Undo Reposts');
+
   return (
-    <div id="telemetry" className="clean-card p-6 border-space-border">
+    <div id="telemetry" className="clean-card p-6 border-space-border space-y-4">
       {/* Header & Status */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 rounded-lg bg-space-darkest border border-space-border flex items-center justify-center text-coral">
             <Terminal className="w-4 h-4" />
@@ -67,13 +79,26 @@ export const TerminalConsole: React.FC<TerminalConsoleProps> = ({
         {/* Action Controls */}
         <div className="flex items-center space-x-2">
           {telemetry.status === 'idle' || telemetry.status === 'completed' || telemetry.status === 'aborted' ? (
-            <button
-              onClick={onStart}
-              className="coral-button px-5 py-2 text-xs flex items-center space-x-2"
-            >
-              <Play className="w-3.5 h-3.5 fill-white" />
-              <span>Execute Clean Sweep</span>
-            </button>
+            <>
+              {onEditModules && (
+                <button
+                  type="button"
+                  onClick={onEditModules}
+                  className="px-3.5 py-2 rounded-md bg-space-card hover:bg-space-card-hover border border-space-border text-space-subtext hover:text-space-text text-xs font-semibold flex items-center space-x-1.5 transition-colors"
+                >
+                  <Sliders className="w-3.5 h-3.5 text-coral" />
+                  <span>Edit Targets</span>
+                </button>
+              )}
+              <button
+                onClick={onStart}
+                disabled={activeModulesList.length === 0}
+                className="coral-button px-5 py-2 text-xs flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Play className="w-3.5 h-3.5 fill-white" />
+                <span>Execute Clean Sweep</span>
+              </button>
+            </>
           ) : telemetry.status === 'running' ? (
             <>
               <button
@@ -118,6 +143,35 @@ export const TerminalConsole: React.FC<TerminalConsoleProps> = ({
             <Download className="w-4 h-4" />
           </button>
         </div>
+      </div>
+
+      {/* Armed Target Confirmation Bar */}
+      <div className="p-2.5 rounded-md bg-space-darkest border border-space-border flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="flex items-center space-x-2">
+          <span className="text-space-muted font-mono font-semibold">Active Targets:</span>
+          {activeModulesList.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {activeModulesList.map((mod, idx) => (
+                <span
+                  key={idx}
+                  className="px-2 py-0.5 rounded bg-space-card border border-space-border-light text-space-text text-[11px] font-mono font-medium"
+                >
+                  {mod}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="text-crimson font-mono font-semibold">⚠️ None Selected! Click 'Edit Targets' to arm modules.</span>
+          )}
+        </div>
+        {onEditModules && (
+          <button
+            onClick={onEditModules}
+            className="text-[11px] text-coral hover:underline font-mono font-semibold"
+          >
+            Change Selection →
+          </button>
+        )}
       </div>
 
       {/* Metrics Row */}

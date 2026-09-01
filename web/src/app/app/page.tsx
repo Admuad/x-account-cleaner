@@ -154,6 +154,25 @@ export default function AppPage() {
         }));
       }
 
+      const savedConfigStr = localStorage.getItem('vanishx_purge_config');
+      if (savedConfigStr) {
+        try {
+          const parsedConfig = JSON.parse(savedConfigStr);
+          if (parsedConfig && typeof parsedConfig === 'object') {
+            setConfig((prev) => ({
+              ...prev,
+              modules: { ...prev.modules, ...(parsedConfig.modules || {}) },
+              dateFilter: { ...prev.dateFilter, ...(parsedConfig.dateFilter || {}) },
+              botFilter: { ...prev.botFilter, ...(parsedConfig.botFilter || {}) },
+              pacing: parsedConfig.pacing || prev.pacing,
+              whitelist: { ...prev.whitelist, ...(parsedConfig.whitelist || {}) },
+            }));
+          }
+        } catch (e) {
+          console.error('Error reading vanishx_purge_config', e);
+        }
+      }
+
       const savedWhitelist = localStorage.getItem('vanishx_whitelist');
       if (savedWhitelist) {
         const parsed = JSON.parse(savedWhitelist);
@@ -281,13 +300,14 @@ export default function AppPage() {
     }
   }, [telemetry.status]);
 
-  // Save changes to whitelist
+  // Save changes to config & whitelist
   const handleConfigChange = (newConfig: PurgeConfig) => {
     setConfig(newConfig);
     try {
+      localStorage.setItem('vanishx_purge_config', JSON.stringify(newConfig));
       localStorage.setItem('vanishx_whitelist', JSON.stringify(newConfig.whitelist));
     } catch (e) {
-      console.error('Error saving whitelist', e);
+      console.error('Error saving config to localStorage', e);
     }
   };
 
@@ -696,6 +716,7 @@ export default function AppPage() {
     if (isLiveMode) {
       window.postMessage({ type: 'VANISHX_STOP_PURGE' }, '*');
     }
+    localStorage.removeItem('vanishx_active_telemetry');
     setTelemetry((prev) => ({
       ...prev,
       status: 'aborted',
@@ -927,7 +948,8 @@ export default function AppPage() {
             <DateRangeFilter
               config={config.dateFilter}
               onChange={(dateFilter) => handleConfigChange({ ...config, dateFilter })}
-              userHandle={profile.handle || activeHandle || 'your_handle'}
+              userHandle={activeHandle || profile.handle || handleInput.trim().replace(/^@/, '') || 'your_handle'}
+              disabled={!config.modules.posts && !config.modules.replies && !config.modules.reposts}
             />
 
             <div className="flex justify-end">
@@ -1001,11 +1023,13 @@ export default function AppPage() {
         {activeTab === 'telemetry' && (
           <TerminalConsole
             telemetry={telemetry}
+            config={config}
             onStart={startExecution}
             onPause={pauseExecution}
             onResume={resumeExecution}
             onAbort={abortExecution}
             onExportReport={exportReport}
+            onEditModules={() => setActiveTab('dates')}
           />
         )}
       </main>

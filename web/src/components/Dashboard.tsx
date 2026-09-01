@@ -380,7 +380,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <DateRangeFilter
           config={config.dateFilter}
           onChange={(newDateConfig) => setConfig({ ...config, dateFilter: newDateConfig })}
-          userHandle={profile.handle}
+          userHandle={profile.handle || 'your_handle'}
+          disabled={!config.modules.posts && !config.modules.replies && !config.modules.reposts}
         />
 
         <PurgeModules
@@ -407,6 +408,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* Live Telemetry Console */}
       <TerminalConsole
         telemetry={telemetry}
+        config={config}
         onStart={startExecution}
         onPause={pauseExecution}
         onResume={resumeExecution}
