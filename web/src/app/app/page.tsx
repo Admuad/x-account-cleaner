@@ -513,6 +513,8 @@ export default function AppPage() {
       targetedCount = profile.followingCount || profile.postsCount || profile.followersCount || 0;
     }
 
+    const currentHandle = activeHandle || profile.handle || handleInput.trim().replace(/^@/, '');
+
     setTelemetry((prev) => ({
       ...prev,
       status: 'running',
@@ -530,15 +532,15 @@ export default function AppPage() {
           timestamp: new Date().toLocaleTimeString(),
           type: 'info',
           message: isLiveMode
-            ? `⚡ Connecting to Companion Extension for @${profile.handle}...`
-            : `🚀 Initializing Sandbox Simulator for @${profile.handle} (Pacing: ${config.pacing})...`,
+            ? `⚡ Connecting to Companion Extension for @${currentHandle}...`
+            : `🚀 Initializing Sandbox Simulator for @${currentHandle} (Pacing: ${config.pacing})...`,
         },
         {
           id: Math.random().toString(),
           timestamp: new Date().toLocaleTimeString(),
           type: 'info',
           message: config.dateFilter.enabled
-            ? `🔍 Date query active: ${generateXSearchQuery(profile.handle, config.dateFilter)}`
+            ? `🔍 Date query active: ${generateXSearchQuery(currentHandle, config.dateFilter)}`
             : '🔍 Full timeline mode active (all dates targeted)',
         },
         ...(config.whitelist.users.length > 0
@@ -559,7 +561,7 @@ export default function AppPage() {
         {
           type: 'VANISHX_START_PURGE',
           config: {
-            handle: profile.handle,
+            handle: currentHandle,
             ...config,
           },
         },
