@@ -32,6 +32,7 @@ import {
   Play,
   RotateCcw,
   Sparkles,
+  Check,
 } from 'lucide-react';
 
 const DEFAULT_CONFIG: PurgeConfig = {
@@ -775,12 +776,23 @@ export default function AppPage() {
                     className="bg-space-darkest border border-space-border rounded-md pl-7 pr-3 py-1.5 text-xs text-space-text focus:outline-none focus:border-coral font-mono w-36 sm:w-44"
                   />
                 </div>
-                <button
-                  type="submit"
-                  className="coral-button px-3 py-1.5 text-xs font-semibold"
-                >
-                  Connect
-                </button>
+                {activeHandle && handleInput.trim().replace(/^@/, '').toLowerCase() === activeHandle.toLowerCase() ? (
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 rounded-md bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-xs font-semibold flex items-center space-x-1 hover:bg-emerald-500/25 transition-all shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                    title="Account is currently connected"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Connected</span>
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="coral-button px-3 py-1.5 text-xs font-semibold"
+                  >
+                    Connect
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={detectActiveTab}
