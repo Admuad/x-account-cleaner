@@ -17,12 +17,39 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://x-account-cleaner.vercel.app'),
   title: 'VanishX | Autonomous 𝕏 Timeline Purge & Bot Cleanser',
   description: 'High-speed, client-side 𝕏 account cleaner. Wipe historical posts before any date, unfollow bots & non-mutuals with zero serverless limits.',
-  keywords: ['VanishX', 'X account cleaner', 'Twitter tweet deleter', 'mass unfollow non mutuals', 'bot detector', 'delete old tweets', 'X purge'],
-  authors: [{ name: 'VanishX Labs' }],
+  keywords: ['VanishX', 'X account cleaner', 'Twitter tweet deleter', 'mass unfollow non mutuals', 'bot detector', 'delete old tweets', 'X purge', 'timeline wipe'],
+  authors: [{ name: 'Admuad', url: 'https://x.com/adedir2' }],
+  creator: 'Admuad',
+  openGraph: {
+    title: 'VanishX | Autonomous 𝕏 Timeline Purge & Bot Cleanser',
+    description: 'High-speed, client-side 𝕏 account cleaner. Wipe historical posts before any date, unfollow bots & non-mutuals with zero serverless limits.',
+    url: 'https://x-account-cleaner.vercel.app',
+    siteName: 'VanishX',
+    images: [
+      {
+        url: '/og-image.jpg',
+        width: 1200,
+        height: 630,
+        alt: 'VanishX — Autonomous 𝕏 Timeline Purge & Clean Slate Engine',
+      },
+    ],
+    locale: 'en_US',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'VanishX | Autonomous 𝕏 Timeline Purge & Bot Cleanser',
+    description: 'High-speed, client-side 𝕏 account cleaner. Wipe historical posts before any date, unfollow bots & non-mutuals with zero serverless limits.',
+    images: ['/og-image.jpg'],
+    creator: '@adedir2',
+  },
   icons: {
     icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
   },
 };
 
