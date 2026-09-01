@@ -17,6 +17,9 @@
   "host_permissions": [
     "https://x.com/*",
     "https://twitter.com/*",
+    "https://vanishx.vercel.app/*",
+    "https://*.vercel.app/*",
+    "https://x-account-cleaner.vercel.app/*",
     "http://localhost:3000/*",
     "http://localhost:*/*",
     "http://127.0.0.1:3000/*",
@@ -36,6 +39,9 @@
     },
     {
       "matches": [
+        "https://vanishx.vercel.app/*",
+        "https://*.vercel.app/*",
+        "https://x-account-cleaner.vercel.app/*",
         "http://localhost:3000/*",
         "http://localhost:*/*",
         "http://127.0.0.1:3000/*",
