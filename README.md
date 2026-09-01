@@ -4,89 +4,63 @@ A high-performance, client-side cleaning suite for X (Twitter) consisting of a N
 
 Designed for surgical timeline purges, date-range filtering, and multi-factor bot detection without requiring expensive Twitter API developer tiers or cloud credential storage.
 
+[![Live Web App](https://img.shields.io/badge/Live%20App-vanishx.vercel.app-FF6044?style=flat&logo=vercel)](https://vanishx.vercel.app)
+[![npm version](https://img.shields.io/npm/v/vanishx.svg?color=cb3837&logo=npm)](https://www.npmjs.com/package/vanishx)
 [![GitHub Repository](https://img.shields.io/badge/GitHub-Admuad%2Fx--account--cleaner-121313?logo=github)](https://github.com/Admuad/x-account-cleaner)
 [![License: MIT](https://img.shields.io/badge/License-MIT-121313.svg)](LICENSE)
-[![Next.js 14](https://img.shields.io/badge/Next.js-14-121313?logo=next.js)](https://nextjs.org/)
-[![Playwright](https://img.shields.io/badge/Playwright-1.49-121313?logo=playwright)](https://playwright.dev/)
 
 ---
 
-## Architectural Overview
+## 🌐 Live Web Application
 
-VanishX operates on a zero-trust, client-side execution model. All DOM manipulations and GraphQL mutations execute directly within the user's authenticated browser context or local Playwright instance.
+Access the zero-install live web dashboard:
 
-```
-                    ┌─────────────────────────┐
-                    │      VanishX Suite      │
-                    └────────────┬────────────┘
-                                 │
-         ┌───────────────────────┼───────────────────────┐
-         ▼                       ▼                       ▼
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  Web Dashboard  │     │ Browser Ext V3  │     │  Headless CLI   │
-│     (/app)      │     │  (/extension)   │     │     (/cli)      │
-└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
-         │                       │                       │
-         │  Live IPC Relay       │  Direct Tab Bridge    │  Local Automation
-         └───────────────────────┼───────────────────────┘
-                                 ▼
-                    ┌─────────────────────────┐
-                    │    X.com DOM/GraphQL    │
-                    │   Zero-State Sweeper    │
-                    └─────────────────────────┘
-```
-
----
-
-## Core Capabilities
-
-- **Date-Range Fast-Forwarding**: Jump directly to historical eras (e.g., `until:2025-12-31`) using native search operators without triggering infinite scroll deadlocks.
-- **Multi-Factor Bot Radar**: Heuristic scoring engine evaluating non-mutual relationships, default avatars, numeric handle patterns (`@user\d{4,}`), empty bios, and skewed following/follower ratios ($>50\times$).
-- **Zero-State Verification Loop**: Reads profile header counters dynamically to ensure full timeline clearance and bypass X's virtual DOM caching lag.
-- **Dedicated Reposts Purging**: Native support for un-retweeting posts on the dedicated `/reposts` route.
-- **Immutable Whitelist Vault**: Complete preservation for protected usernames, specific tweet IDs, and preservation keywords (`#keep`).
-- **Parallel Multi-Tab Execution**: Concurrent workers for simultaneous tweet deletion and relationship cleanup.
+👉 **[https://vanishx.vercel.app](https://vanishx.vercel.app)**
 
 ---
 
 ## Quick Start
 
-### 1. Web Application
+### 1. Terminal CLI (Instant Execution via npx)
+
+Run the autonomous cleaner directly in any terminal with zero clone required:
+
+```bash
+npx vanishx
+```
+
+Or run headless automated wipes with specific flags:
+
+```bash
+# Delete all historical posts & replies before a date in headless mode
+npx vanishx --posts --replies --headless
+
+# Mass unfollow non-mutuals with safe pacing
+npx vanishx --unfollow --min-delay 2000 --max-delay 4000
+```
+
+---
+
+### 2. Companion Browser Extension
+
+1. Download [`vanishx-extension.zip`](https://vanishx.vercel.app/vanishx-extension.zip).
+2. Open `chrome://extensions` in Chrome, Edge, Brave, or Kiwi Browser.
+3. Toggle **Developer mode** ON (top-right).
+4. Drag and drop the extracted `extension/` folder or click **Load unpacked**.
+5. Open [**vanishx.vercel.app/app**](https://vanishx.vercel.app/app) and click **Detect Tab** to start cleaning!
+
+---
+
+### 3. Local Development (Optional)
 
 ```bash
 # Clone repository
 git clone https://github.com/Admuad/x-account-cleaner.git
 cd x-account-cleaner
 
-# Start web dashboard
+# Start web dashboard locally
 npm run ui
 ```
-
-Access the interface at `http://localhost:3000`.
-
----
-
-### 2. Headless Terminal CLI
-
-```bash
-# Install root dependencies
-npm install
-
-# Install Playwright browser binary
-npx playwright install chromium
-
-# Launch interactive CLI wizard
-npm start
-```
-
----
-
-### 3. Companion Browser Extension
-
-1. Open `chrome://extensions` (or Kiwi Browser / Orion on mobile).
-2. Enable **Developer mode**.
-3. Click **Load unpacked** and select the `extension/` directory.
-4. Navigate to `x.com` and open `http://localhost:3000/app` to dispatch live tasks.
 
 ---
 

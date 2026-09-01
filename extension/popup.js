@@ -3,10 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusEl = document.getElementById('accountName');
   const statusBadge = document.getElementById('statusBadge');
 
-  // Open web dashboard — prefer localhost dev, fall back to GitHub Pages / deployed URL
+  // Open web dashboard
   openDashboardBtn.addEventListener('click', () => {
-    // Try to open localhost first (dev mode), otherwise open deployed app
-    chrome.tabs.create({ url: 'http://localhost:3000/app' });
+    chrome.tabs.create({ url: 'https://vanishx.vercel.app/app' });
   });
 
   // Detect if current tab is an X.com tab
