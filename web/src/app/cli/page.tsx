@@ -27,7 +27,7 @@ export default function CliPage() {
 
   // Generate dynamic CLI command
   const generateCommand = () => {
-    const parts = ['npm start --'];
+    const parts = ['npx vanishx'];
     if (flags.posts) parts.push('--posts');
     if (flags.replies) parts.push('--replies');
     if (flags.reposts) parts.push('--reposts');
@@ -43,8 +43,8 @@ export default function CliPage() {
       title: 'Step 1: 1-Command Instant Run (Zero Install)',
       desc: 'Run the CLI directly in any terminal without cloning the repository or downloading source code',
       commands: [
-        { label: 'Instant Execution via npx (Recommended)', cmd: 'npx x-account-cleaner' },
-        { label: 'Global CLI Installation', cmd: 'npm install -g x-account-cleaner\nx-account-cleaner' },
+        { label: 'Instant Execution via npx (Recommended)', cmd: 'npx vanishx' },
+        { label: 'Global CLI Installation', cmd: 'npm install -g vanishx\nvanishx' },
       ],
     },
     {
@@ -61,8 +61,8 @@ export default function CliPage() {
       title: 'Step 3: Direct Flag Automation',
       desc: 'Run unattended headless sweeps with specific CLI arguments',
       commands: [
-        { label: 'Headless Full Clean Slate', cmd: 'npx x-account-cleaner --all --headless' },
-        { label: 'Unfollow Only with Safe Pacing', cmd: 'npx x-account-cleaner --unfollow --min-delay 2500 --max-delay 4500' },
+        { label: 'Headless Full Clean Slate', cmd: 'npx vanishx --all --headless' },
+        { label: 'Unfollow Only with Safe Pacing', cmd: 'npx vanishx --unfollow --min-delay 2500 --max-delay 4500' },
       ],
     },
   ];
